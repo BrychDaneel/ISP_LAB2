@@ -36,20 +36,27 @@ class MyRm(object):
         os.renames(oldname, newname)
         self.tr.unlock()
     
-    def clean(self, path='', recursive=False):
-        path = self.tr.toInternal(path)
+    def clean(self, path=None, recursive=False):
+        
+        if path is None:
+            path = self.cfg.trash_dir
+            recursive = True
+        
+        if not(os.path.samefile(os.path.commonprefix([path, self.cfg.trash_dir]))): 
+            path = self.tr.toInternal(path)
         
         if (os.path.isdir(path) and (not recursive)):
             return
         
         if (os.path.isdir(path)):
-            for f in os.listdir(self.cfc.trash_dir):
+            for f in os.listdir(path):
                 f = os.path.join(path, f)
                 if os.path.isdir(f):
                     self.clean(f, recursive)
             os.rmdir(path)
         else:
-            os.remove(f)
+            if not os.path.samefile(path, self.tr.lockfile()):
+                os.remove(f)
                     
     
 
