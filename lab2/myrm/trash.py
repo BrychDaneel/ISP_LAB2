@@ -12,12 +12,11 @@ class Trash(object):
         return os.path.join(self.cfg.trash_dir, self.cfg.trash_lockfile)    
     
     def lock(self):
-        lf = lockfile()
-        self.lockfile = open(lf, "w")
-        self.lockfile.close()
+        lf = self.lockfile()
+        open(lf, "w").close()
     
     def unlock(self):
-        lf = lockfile()
+        lf = self.lockfile()
         os.remove(lf)
 
     def toInternal(self, path):
