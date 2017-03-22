@@ -6,3 +6,8 @@ class Config(object):
         self.trash_dir = "./trash"
         self.trash_lockfile = "lock"
         
+        self.force = False
+        self.dryrun = True
+        self.verbose = True
+        self.interactive = False
+        
