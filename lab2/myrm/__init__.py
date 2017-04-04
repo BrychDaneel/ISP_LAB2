@@ -6,6 +6,8 @@ import re
 import config
 import trash
 import utils
+import datetime
+import fnmatch
 
 from config import Config
 from trash import Trash
@@ -15,7 +17,6 @@ class MyRm(object):
     def __init__(self, cfg):
         self.cfg = cfg
         self.tr = Trash(cfg)
-
         
     def lock_decodator(f):
         def func(self, *args,**kargs):
@@ -27,23 +28,36 @@ class MyRm(object):
     def _rmfile(self, filename):
         oldname = os.path.abspath(filename)
         newname =  self.tr.toInternal(filename)
+        ts, msec = utils.timestamp()
+        newname = "{name}.{timestamp}.{msec}".format(name=newname, timestamp=ts, msec=msec)
         if utils.acsess(oldname, "Moving file {} to {}".format(oldname, newname), self.cfg):
-            os.makedirs(os.path.abspath(newname))
+            os.makedirs(os.path.dirname(newname))
             os.rename(oldname, newname)    
             
     def _rmdir(self, dirname):
         oldname = os.path.abspath(dirname)
         newname =  self.tr.toInternal(dirname)
+        
         if utils.acsess(oldname, "Moving dir {} to {}".format(oldname, newname), self.cfg):
-            if os.path.exist(newname):
-                os.rmdir(oldname)
-            else:
-                os.renames(oldname, newname)  
+            os.makedirs(newname)
+            
+            for f in os.listdir(dirname):
+                full = os.path.join(path, f)
+                isdir = os.path.isdir(full)
+                if  isdir:
+                    self._rmdir(full)
+                else:
+                    self._rmfile(full)
+            os.rmdir(oldname)
+        
+        
             
         
     @lock_decodator
     def rm(self, filename, recursive=False):
-        for isdir, path in utils.maskWalk(filename, recursive):
+        path, filemask = utils.parceDirMsk(filename)
+        
+        for isdir, path in utils.search(path, filemask, recursive):
             if isdir:
                 self._rmdir(path)
             else:
@@ -52,11 +66,18 @@ class MyRm(object):
         
         
     @lock_decodator
-    def ls(self, direct='.'):
-        int_direct = self.tr.toInternal(direct)
-        if os.path.isdir(int_direct): 
-            for s in os.listdir(int_direct):
-                print(s)
+    def ls(self, filename='.', recursive=False):
+        filename = self.tr.toInternal(filename)
+        path, filemask = os.path.split(filename)
+    
+        for isdir, path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive):
+            if isdir:
+                print('dir: ', path)
+            else:
+                tk = path.split('.')
+                time = datetime.datetime.utcfromtimestamp(int(tk[-2]))
+                f = '.'.join(tk[0:-2])
+                print('file: ' + path + ' ' + time.isoformat())
         
     @lock_decodator
     def restore(self, filename):
