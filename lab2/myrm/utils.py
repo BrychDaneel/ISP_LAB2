@@ -23,7 +23,6 @@ def search(path, dirmask, filemask, recursive=False):
 
         fm = re.compile(filemask)
         dm = re.compile(dirmask)
-        print(path, dirmask, filemask, recursive)
         for f in os.listdir(path):
             full = os.path.join(path, f)
             isdir = os.path.isdir(full)
@@ -41,5 +40,5 @@ def search(path, dirmask, filemask, recursive=False):
                     
 def timestamp():
     d = datetime.datetime.utcnow()
-    return d.toordinal()*24*60*60 + d.hour*60*60 + d.minute * 60 + d.second, d.microsecond
+    return (d.toordinal() - datetime.date(1970, 1, 1).toordinal())*24*60*60 + d.hour*60*60 + d.minute * 60 + d.second, d.microsecond
     

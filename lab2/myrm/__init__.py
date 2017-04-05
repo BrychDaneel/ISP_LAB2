@@ -31,7 +31,8 @@ class MyRm(object):
         ts, msec = utils.timestamp()
         newname = "{name}.{timestamp}.{msec}".format(name=newname, timestamp=ts, msec=msec)
         if utils.acsess(oldname, "Moving file {} to {}".format(oldname, newname), self.cfg):
-            os.makedirs(os.path.dirname(newname))
+            if not os.path.exists(os.path.dirname(newname)):
+                os.makedirs(os.path.dirname(newname))
             os.rename(oldname, newname)    
             
     def _rmdir(self, dirname):
@@ -39,10 +40,11 @@ class MyRm(object):
         newname =  self.tr.toInternal(dirname)
         
         if utils.acsess(oldname, "Moving dir {} to {}".format(oldname, newname), self.cfg):
-            os.makedirs(newname)
+            if not os.path.exists(newname):
+                os.makedirs(newname)
             
             for f in os.listdir(dirname):
-                full = os.path.join(path, f)
+                full = os.path.join(dirname, f)
                 isdir = os.path.isdir(full)
                 if  isdir:
                     self._rmdir(full)
@@ -55,9 +57,9 @@ class MyRm(object):
         
     @lock_decodator
     def rm(self, filename, recursive=False):
-        path, filemask = utils.parceDirMsk(filename)
+        path, filemask = os.path.split(filename)
         
-        for isdir, path in utils.search(path, filemask, recursive):
+        for isdir, path in utils.search(path, filemask, filemask, recursive):
             if isdir:
                 self._rmdir(path)
             else:
@@ -80,10 +82,15 @@ class MyRm(object):
                 print('file: ' + path + ' ' + time.isoformat())
         
     @lock_decodator
-    def restore(self, filename):
-        oldname =  self.tr.toInternal(filename)
-        newname = os.path.abspath(filename)
-        os.renames(oldname, newname)
+    def restore(self, filename, recursive=False):
+        filename = self.tr.toInternal(filename)
+        path, filemask = os.path.split(filename) 
+        print(path, fnmatch.translate(filemask+'.*.*'))
+        for isdir, path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive):
+            oldname =  path
+            newname = self.tr.toExternal(path)
+            #print('HELLOW ',oldname, newname)
+            os.renames(oldname, newname)
     
     
     def _clean(self, path, recursive=False):
