@@ -24,100 +24,46 @@ class MyRm(object):
             f(self, *args,**kargs)
             self.tr.unlock()
         return func 
-    
-    def _rmfile(self, filename):
-        oldname = os.path.abspath(filename)
-        newname =  self.tr.toInternal(filename)
-        ts, msec = utils.timestamp()
-        newname = "{name}.{timestamp}.{msec}".format(name=newname, timestamp=ts, msec=msec)
-        if utils.acsess(oldname, "Moving file {} to {}".format(oldname, newname), self.cfg):
-            if not os.path.exists(os.path.dirname(newname)):
-                os.makedirs(os.path.dirname(newname))
-            os.rename(oldname, newname)    
-            
-    def _rmdir(self, dirname):
-        oldname = os.path.abspath(dirname)
-        newname =  self.tr.toInternal(dirname)
-        
-        if utils.acsess(oldname, "Moving dir {} to {}".format(oldname, newname), self.cfg):
-            if not os.path.exists(newname):
-                os.makedirs(newname)
-            
-            for f in os.listdir(dirname):
-                full = os.path.join(dirname, f)
-                isdir = os.path.isdir(full)
-                if  isdir:
-                    self._rmdir(full)
-                else:
-                    self._rmfile(full)
-            os.rmdir(oldname)
-        
-        
-            
+                                
         
     @lock_decodator
     def rm(self, filename, recursive=False):
         path, filemask = os.path.split(filename)
-        
-        for isdir, path in utils.search(path, filemask, filemask, recursive):
-            if isdir:
-                self._rmdir(path)
-            else:
-                self._rmfile(path)
-                        
+        for path in utils.search(path, filemask, filemask, recursive):
+            self.tr.add(path)                        
         
         
     @lock_decodator
-    def ls(self, filename='.', recursive=False):
+    def ls(self, filename='.', recursive=False, old=0):
         filename = self.tr.toInternal(filename)
         path, filemask = os.path.split(filename)
     
-        for isdir, path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive):
+        for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive=recursive, findall=True):
+            
+            isdir = os.path.isdir(path)
+            f, time = self.tr.toExternal(path)
             if isdir:
-                print('dir: ', path)
+                print('dir: ' + f)
             else:
-                tk = path.split('.')
-                time = datetime.datetime.utcfromtimestamp(int(tk[-2]))
-                f = '.'.join(tk[0:-2])
-                print('file: ' + path + ' ' + time.isoformat())
+                f, time = self.tr.toExternal(path)
+                print('file: ' +  f + ' ' + time.isoformat())
         
     @lock_decodator
-    def restore(self, filename, recursive=False):
+    def rs(self, filename, recursive=False, old=0):
         filename = self.tr.toInternal(filename)
         path, filemask = os.path.split(filename) 
         print(path, fnmatch.translate(filemask+'.*.*'))
-        for isdir, path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive):
-            oldname =  path
-            newname = self.tr.toExternal(path)
-            #print('HELLOW ',oldname, newname)
-            os.renames(oldname, newname)
-    
-    
-    def _clean(self, path, recursive=False):
-        if (os.path.isdir(path) and (not recursive)):
-            return
+        for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive=recursive):
+            self.tr.rs(path)
         
-        if (os.path.isdir(path)):
-            for f in os.listdir(path):
-                f = os.path.join(path, f)
-                self._clean_(f, recursive)
-            os.rmdir(path)
-        else:
-            os.remove(path)
-                
 
     @lock_decodator
-    def clean(self, path=None, recursive=False):    
-        if path is None:
-            path = self.cfg.trash_dir
-            for f in os.listdir(path):
-                f = os.path.join(path, f)
-                if not os.path.samefile(f, self.tr.lockfile()):
-                    self._clean(f, True)
-            return
-            
+    def clean(self, path=None, recursive=False, old=0):    
+        path, filemask = os.path.split(path)
         path = self.tr.toInternal(path)
-        self._clean(path, recursive)
+        
+        for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask + '.*.*'),  recursive):
+            self.tr.rm(path)
         
 
 
