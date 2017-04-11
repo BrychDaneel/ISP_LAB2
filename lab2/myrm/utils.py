@@ -2,23 +2,7 @@
 import os
 import re
 import datetime
-import fnmatch
-
-
-def ask(filename):
-    u_ans = raw_input("Perfom operation to {} ? [Y/n]".format(filename)).lower()
-    return  not u_ans or u_ans == 'y'
-
-def acsess(targ, msg, cfg):
-    if cfg.interactive and not ask(targ):
-        return False
-    if cfg.verbose:
-        print(msg)
-    if cfg.dryrun:
-        return False
-    return True
-
-        
+import fnmatch  
 
 def search(path, dirmask, filemask, recursive=False, findall=False):
 
@@ -40,8 +24,7 @@ def search(path, dirmask, filemask, recursive=False, findall=False):
             
                     
                     
-def timestamp(dt):
-    d = dt
+def timestamp(d):
     return (d.toordinal() - datetime.date(1970, 1, 1).toordinal())*24*60*60 + d.hour*60*60 + d.minute * 60 + d.second, d.microsecond
 
 def addstamp(path, dt):
@@ -56,9 +39,10 @@ def splitstamp(path):
         
     sec = int(spl[-2])
     msec = int(spl[-1])
+   
     
     time = datetime.datetime.utcfromtimestamp(sec)
-    time.replace(microsecond = msec) 
+    time += datetime.timedelta(microseconds = msec)
     return newname, time
 
 

@@ -2,6 +2,7 @@
 import os
 import utils
 import datetime
+import logging
 
 class Trash(object):
     
@@ -11,7 +12,7 @@ class Trash(object):
         self._lockfile = None
         self._size = None
         self._elems = None
-
+        self._locked = False
         
     def lockfile(self):
         return os.path.join(self.cfg.trash_dir, self.cfg.trash_lockfile)    
@@ -22,19 +23,29 @@ class Trash(object):
         
         lf = self.lockfile()
         assert(not os.path.exists(lf))
-        self._dirpath  = self.cfg.trash_dir
-        self._elems = utils.filecount(self._dirpath)
-        self._size = utils.size(self._dirpath)
-        self._lockfile = lf
         open(lf, "w").close()
+        self._dirpath  = self.cfg.trash_dir
+        self._elems = utils.filecount(self._dirpath) - utils.filecount(lf)
+        self._size = utils.size(self._dirpath) - utils.size(lf)
+        self._lockfile = lf
+        self._locked = True
     
     def unlock(self):
+        lf = self._lockfile
+        os.remove(lf)
         self._dirpath = None
         self._lockfile = None
         self._size = None
         self._elems = None
-        lf = self.lockfile()
-        os.remove(lf)
+        self._locked = False
+        
+    def needlock_decodator(f):
+        def func(self, *args,**kargs):
+            if self._locked:
+                f(self, *args,**kargs)
+            else:
+                assert(False)
+        return func 
 
     def toInternal(self, path):
         
@@ -65,66 +76,76 @@ class Trash(object):
         return filename, removetime
     
     
-
+    @needlock_decodator
     def addFile(self, filename): 
         oldname = os.path.abspath(filename)
         newname =  self.toInternal(filename)
         newname = utils.addstamp(newname, datetime.datetime.utcnow())
-        if utils.acsess(oldname, "Moving file {} to {}".format(oldname, newname), self.cfg):
-            if not os.path.exists(os.path.dirname(newname)):
-                os.makedirs(os.path.dirname(newname))
-            os.rename(oldname, newname)    
-            
+        logging.debug("Moving file {} to {}".format(oldname, newname))
+        if not os.path.exists(os.path.dirname(newname)):
+            os.makedirs(os.path.dirname(newname))
+        os.rename(oldname, newname)    
+    
+    @needlock_decodator
     def addDir(self, dirname):
         oldname = os.path.abspath(dirname)
         newname =  self.toInternal(dirname)
         
-        if utils.acsess(oldname, "Moving dir {} to {}".format(oldname, newname), self.cfg):
-            if not os.path.exists(newname):
-                os.makedirs(newname)
-            
-            for f in os.listdir(dirname):
-                full = os.path.join(dirname, f)
-                isdir = os.path.isdir(full)
-                if  isdir:
-                    self.addDir(full)
-                else:
-                    self.addFile(full)
-            os.rmdir(oldname)
+        if not os.path.exists(newname):
+            logging.debug("Make dir {} ".format( newname))
+            os.makedirs(newname)
+        
+        for f in os.listdir(dirname):
+            full = os.path.join(dirname, f)
+            isdir = os.path.isdir(full)
+            if  isdir:
+                self.addDir(full)
+            else:
+                self.addFile(full)
+        os.rmdir(oldname)
 
-            
+    @needlock_decodator        
     def rsfile(self, filename):
         oldname = os.path.abspath(filename)
         newname = self.toExternal(oldname)[0]
             
-        if utils.acsess(oldname, "Moving file {} to {}".format(oldname, newname), self.cfg):
-            if not os.path.exists(os.path.dirname(newname)):
-                os.makedirs(os.path.dirname(newname))
-            os.rename(oldname, newname) 
+        
+        if not os.path.exists(os.path.dirname(newname)):
+            logging.debug("Make dir {} ".format( newname))
+            os.makedirs(os.path.dirname(newname))
             
+        logging.debug("Moving file {} to {}".format(oldname, newname))
+        os.rename(oldname, newname) 
             
+    @needlock_decodator        
     def rsdir(self, dirname):
         oldname = os.path.abspath(dirname)
         newname =  self.toExternal(oldname)[0]
         
-        if utils.acsess(oldname, "Moving dir {} to {}".format(oldname, newname), self.cfg):
-            if not os.path.exists(newname):
-                os.makedirs(newname)
-            
-            for f in os.listdir(dirname):
-                full = os.path.join(dirname, f)
-                isdir = os.path.isdir(full)
-                if  isdir:
-                    self._rsdir(full)
-                else:
-                    self._rsfile(full)
-                    
+        
+        if not os.path.exists(newname):
+            logging.debug("Make dir {} ".format( newname))
+            os.makedirs(newname)
+        
+        for f in os.listdir(dirname):
+            full = os.path.join(dirname, f)
+            isdir = os.path.isdir(full)
+            if  isdir:
+                self.rsdir(full)
+            else:
+                self.rsfile(full)
+                
+    @needlock_decodator                
     def rs(self, path):
+       
         if os.path.isdir(path):
             self.rsdir(path)
         else:
             self.rsfile(path)
-            
+        return True
+    
+    
+    @needlock_decodator        
     def add(self, path):
         
         newsize = self._size + utils.size(path)
@@ -139,14 +160,17 @@ class Trash(object):
             
         self._size = newsize
         self._elems = newcount
+        
+        return True
             
-            
-                    
-                    
+    @needlock_decodator           
     def rm(self, path):
         if not utils.acsess(path, "Delete {}".format(path), self.cfg):
-            return
-        
+            return False
+       
+        newsize = self._size - utils.size(path)
+        newcount = self._elems - utils.filecount(path)
+       
         if not os.path.isdir(path):
             os.remove(path)
         else:
@@ -155,43 +179,65 @@ class Trash(object):
                     os.remove(f)
                 os.rmdir(dirpath)
                 
+        self._size = newsize
+        self._elems = newcount     
+        return True
     
-    def cleanOld(self, file_time):        
+    
+    
+    def _autocleanByDate(self, file_time):        
         now = datetime.datetime.utcnow()
-        print(file_time)
-        oldfiles = filter(lambda f, t: datetime.timedelta(t, now).days  > self.cfg.trash_maxdays,  file_time)
+        oldfiles = filter(lambda (f, t): (now - t).days  > self.cfg.trash_maxdays,  file_time)
                 
         for f, t in oldfiles:
-            self.rm(f)
+            logging.debug("{} is too old".format(utils.addstamp(f, t)))
+            self.rm(utils.addstamp(f, t))
         return list(set(file_time).difference(oldfiles)) 
     
     
-    def cleanLot(self, files):
-        file_time.sort(key=lambda f, t: t, reversed=True)
-        
-        while (self.cfg.trash_maxcount < self._cleanelems or self.cfg.trash_cleansize < self._size):
-            self.rm(file_time[-1][0])
-            file_time.pop(-1)
     
-    def cleanSame(self, files):
-        file_time.sort(key=lambda f, t: t)
-        
+    def _autocleanByTrashCount(self, file_time):
+        nft = sorted(file_time,key=lambda (f, t): t, reverse=True) 
+         
+        while self.cfg.trash_cleanelems <= self._elems:
+            f, t = nft[-1]
+            logging.debug("Removing {} to free bukkit({} files excess)".format(
+                utils.addstamp(f, t), self._elems - self.cfg.trash_cleanelems + 1))
+            self.rm(utils.addstamp(f, t))
+            nft.pop(-1)
+        return nft
+    
+    def _autocleanByTrashSize(self, file_time):
+        nft = sorted(file_time,key=lambda (f, t): t, reverse=True) 
+         
+        while self.cfg.trash_cleansize <= self._size:
+            f, t = nft[-1]
+            logging.debug("Removing {} to free bukkit({} bytes excess)".format(
+                utils.addstamp(f, t), self._size - self.cfg.trash_cleansize))
+            self.rm(utils.addstamp(f, t))
+            nft.pop(-1)
+        return nft
+    
+    def _cleanBySameCount(self, file_time):
+        nf = file_time[:]
+    
         d = {}
-        for f, t in file_time:
+        for f, t in nf:
             if not f in d:
                 d[f]=[]
             d[f].append(t)
         
-        nf = files[:]
-        for key, val in d.iteritems:
-            val.sort(reversed=True)
-            if len(val) > cfg.trash_maxsame:
-                for dt in val[trash_maxsize:-1]:
-                    rm(utils.addstamp(key, dt))
-                    nf.remove(key, dt)
+        
+        for key, val in d.iteritems():
+            val.sort(reverse=True)
+            if len(val) > self.cfg.trash_maxsame:
+                for dt in val[self.cfg.trash_maxsame:]:
+                    logging.debug("Removing {} becouse  there are a lot of same file".format(utils.addstamp(key, dt)))
+                    self.rm(utils.addstamp(key, dt))
+                    nf.remove((key, dt))
         return nf
                     
-    
+    @needlock_decodator
     def autoclean(self):
         
         files = []
@@ -201,7 +247,8 @@ class Trash(object):
         files = filter(lambda fn: not os.path.samefile(fn, self._lockfile), files)
                 
         file_time = [utils.splitstamp(f) for f in files]
-        file_time = self.cleanOld(file_time)
-        file_time = self.cleanLot(file_time)
-        file_time = self.cleanSame(file_time)
+        file_time = self._autocleanByDate(file_time)
+        file_time = self._autocleanByTrashCount(file_time)
+        file_time = self._autocleanByTrashSize(file_time)
+        file_time = self._cleanBySameCount(file_time)
         

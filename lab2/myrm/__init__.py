@@ -8,29 +8,36 @@ import trash
 import utils
 import datetime
 import fnmatch
+import logging
+import acsess_manager
 
 from config import Config
 from trash import Trash
+from acsess_manager import AcsessManager
 
 class MyRm(object):
     
     def __init__(self, cfg):
         self.cfg = cfg
         self.tr = Trash(cfg)
+        self.ascmanager = AcsessManager(cfg)
         
     def lock_decodator(f):
         def func(self, *args,**kargs):
             self.tr.lock()
-            f(self, *args,**kargs)
-            self.tr.unlock()
+            try:
+                f(self, *args,**kargs)
+            finally:
+                self.tr.unlock()
         return func 
                                 
         
     @lock_decodator
     def rm(self, filename, recursive=False):
         path, filemask = os.path.split(filename)
-        for path in utils.search(path, filemask, filemask, recursive):
-            self.tr.add(path)                        
+        for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask), recursive):
+            if  self.ascmanager.removeAcsess(path):
+                self.tr.add(path)                        
         
         
     @lock_decodator
@@ -52,9 +59,9 @@ class MyRm(object):
     def rs(self, filename, recursive=False, old=0):
         filename = self.tr.toInternal(filename)
         path, filemask = os.path.split(filename) 
-        print(path, fnmatch.translate(filemask+'.*.*'))
         for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive=recursive):
-            self.tr.rs(path)
+            if  self.ascmanager.restoreAcsess(self.tr.toExternal(path)):
+                self.tr.rs(path)
         
 
     @lock_decodator
@@ -63,11 +70,18 @@ class MyRm(object):
         path = self.tr.toInternal(path)
         
         for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask + '.*.*'),  recursive):
-            self.tr.rm(path)
-        
+            if  self.ascmanager.cleanAcsess(self.tr.toExternal(path)):
+                self.tr.rm(path)
+                
+                
+    @lock_decodator            
+    def autoclean(self, path=None, recursive=False): 
+        if  self.ascmanager.autocleanAcsess():
+            self.tr.autoclean()
 
 
 def getrm():
+    logging.basicConfig(level = logging.DEBUG)
     cfg = Config()
     return MyRm(cfg)   
     
