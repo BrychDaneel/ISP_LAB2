@@ -14,9 +14,9 @@ def getDefaultConfig():
     res['trash']['lockfile'] = "lock"
     res['trash']['allowautoclean'] = True
     
-    res['trash']['maximum'] = {}
-    res['trash']['maximum']['size'] = 1024
-    res['trash']['maximum']['count'] = 5
+    res['trash']['max'] = {}
+    res['trash']['max']['size'] = 1024
+    res['trash']['max']['count'] = 5
     
     res['trash']['autoclean'] = {}
     res['trash']['autoclean']['size'] = 300

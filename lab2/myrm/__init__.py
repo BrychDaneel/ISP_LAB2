@@ -10,9 +10,12 @@ import datetime
 import fnmatch
 import logging
 import acsess_manager
+import autoclean
 
 from trash import Trash
 from acsess_manager import AcsessManager
+
+
 
 class MyRm(object):
     
@@ -76,7 +79,7 @@ class MyRm(object):
     @lock_decodator            
     def autoclean(self, path=None, recursive=False): 
         if  self.ascmanager.autocleanAcsess():
-            self.tr.autoclean()
+            autoclean.autoclean(self.tr)
 
 
 def getrm():
