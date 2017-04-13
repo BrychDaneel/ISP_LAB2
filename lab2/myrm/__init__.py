@@ -11,7 +11,6 @@ import fnmatch
 import logging
 import acsess_manager
 
-from config import Config
 from trash import Trash
 from acsess_manager import AcsessManager
 
@@ -82,11 +81,11 @@ class MyRm(object):
 
 def getrm():
     logging.basicConfig(level = logging.DEBUG)
-    cfg = Config()
+    cfg = config.getDefaultConfig()
     return MyRm(cfg)   
     
 def main():
-    cfg = Config()
+    cfg = config.getDefaultConfig()
     mrm = MyRm(cfg)
     
     

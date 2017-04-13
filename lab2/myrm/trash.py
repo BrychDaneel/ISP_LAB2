@@ -15,16 +15,16 @@ class Trash(object):
         self._locked = False
         
     def lockfile(self):
-        return os.path.join(self.cfg.trash_dir, self.cfg.trash_lockfile)    
+        return os.path.join(self.cfg["trash"]["dir"], self.cfg["trash"]["lockfile"])    
     
     def lock(self):
-        if not (os.path.exists(self.cfg.trash_dir)):
-            os.makedirs(self.cfg.trash_dir)
+        if not (os.path.exists(self.cfg["trash"]["dir"])):
+            os.makedirs(self.cfg["trash"]["dir"])
         
         lf = self.lockfile()
         assert(not os.path.exists(lf))
         open(lf, "w").close()
-        self._dirpath  = self.cfg.trash_dir
+        self._dirpath  = self.cfg["trash"]["dir"]
         self._elems = utils.filecount(self._dirpath) - utils.filecount(lf)
         self._size = utils.size(self._dirpath) - utils.size(lf)
         self._lockfile = lf
@@ -150,8 +150,8 @@ class Trash(object):
         
         newsize = self._size + utils.size(path)
         newcount = self._elems + utils.filecount(path)
-        assert(newsize <= self.cfg.trash_maxsize)
-        assert(newcount <= self.cfg.trash_maxelems)
+        assert(newsize <= self.cfg["trash"]["max"]["size"])
+        assert(newcount <= self.cfg["trash"]["max"]["count"])
         
         if os.path.isdir(path):    
             self.addDir(path)
@@ -165,8 +165,6 @@ class Trash(object):
             
     @needlock_decodator           
     def rm(self, path):
-        if not utils.acsess(path, "Delete {}".format(path), self.cfg):
-            return False
        
         newsize = self._size - utils.size(path)
         newcount = self._elems - utils.filecount(path)
@@ -199,10 +197,10 @@ class Trash(object):
     def _autocleanByTrashCount(self, file_time):
         nft = sorted(file_time,key=lambda (f, t): t, reverse=True) 
          
-        while self.cfg.trash_cleanelems <= self._elems:
+        while self.cfg["trash"]["clean"]["count"] <= self._elems:
             f, t = nft[-1]
             logging.debug("Removing {} to free bukkit({} files excess)".format(
-                utils.addstamp(f, t), self._elems - self.cfg.trash_cleanelems + 1))
+                utils.addstamp(f, t), self._elems - self.cfg["trash"]["clean"]["count"] + 1))
             self.rm(utils.addstamp(f, t))
             nft.pop(-1)
         return nft
@@ -213,7 +211,7 @@ class Trash(object):
         while self.cfg.trash_cleansize <= self._size:
             f, t = nft[-1]
             logging.debug("Removing {} to free bukkit({} bytes excess)".format(
-                utils.addstamp(f, t), self._size - self.cfg.trash_cleansize))
+                utils.addstamp(f, t), self._size - self.cfg["trash"]["clean"]["size"]))
             self.rm(utils.addstamp(f, t))
             nft.pop(-1)
         return nft
@@ -222,7 +220,7 @@ class Trash(object):
         nf = file_time[:]
     
         d = {}
-        for f, t in nf:
+        for f, t in nf:            
             if not f in d:
                 d[f]=[]
             d[f].append(t)
@@ -230,8 +228,8 @@ class Trash(object):
         
         for key, val in d.iteritems():
             val.sort(reverse=True)
-            if len(val) > self.cfg.trash_maxsame:
-                for dt in val[self.cfg.trash_maxsame:]:
+            if len(val) > self.cfg["trash"]["clean"]["samename"]:
+                for dt in val[self.cfg["trash"]["clean"]["samename"]:]:
                     logging.debug("Removing {} becouse  there are a lot of same file".format(utils.addstamp(key, dt)))
                     self.rm(utils.addstamp(key, dt))
                     nf.remove((key, dt))
