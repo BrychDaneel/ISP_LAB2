@@ -57,7 +57,7 @@ def saveToCFG(cfg, filename):
 
 
 def loadFromCFG(filename):
-    res = {}
+    res = getDefaultConfig()
     
     with open(filename, mode='r') as f:
         for line in f.readlines():

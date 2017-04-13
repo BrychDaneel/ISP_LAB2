@@ -29,6 +29,8 @@ def timestamp(d):
 
 
 def addstamp(path, dt):
+    if dt is None:
+        return path
     ts, msec = timestamp(dt)
     return "{name}.{timestamp}.{msec}".format(name=path, timestamp=ts, msec=msec)
 

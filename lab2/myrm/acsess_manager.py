@@ -13,7 +13,7 @@ class AcsessManager(object):
         return  not u_ans or u_ans == 'y'
     
     def removeAcsess(self, path):
-        if self.cfg["interactive"] and not ask('remove file ', path):
+        if self.cfg["interactive"] and not self.ask('remove', path):
             return False
         logging.info('Remove {}'.format(path))
         if self.cfg["dryrun"]:
@@ -21,7 +21,7 @@ class AcsessManager(object):
         return True
     
     def restoreAcsess(self, path):
-        if self.cfg["interactive"] and not ask('restore file ', path):
+        if self.cfg["interactive"] and not self.ask('restore', path):
             return False
         logging.info('Restore {}'.format(path))
         if self.cfg["dryrun"]:
@@ -29,7 +29,7 @@ class AcsessManager(object):
         return True
     
     def cleanAcsess(self, path):
-        if self.cfg["interactive"] and not ask('clean file(forever)', path):
+        if self.cfg["interactive"] and not self.ask('clean(forever)', path):
             return False
         logging.info("Clean '{}'".format(path))
         if self.cfg["dryrun"]:
@@ -37,7 +37,7 @@ class AcsessManager(object):
         return True
 
     def autocleanAcsess(self):
-        if self.cfg["interactive"] and not ask('autoclean file(forever) in', self.cfg["trash"]["dir"]):
+        if self.cfg["interactive"] and not self.ask('autoclean file(forever) in', self.cfg["trash"]["dir"]):
             return False
         logging.info("Autoclean '{}'".format(self.cfg["trash"]["dir"]))
         if self.cfg["dryrun"]:

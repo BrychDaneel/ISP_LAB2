@@ -11,10 +11,10 @@ import fnmatch
 import logging
 import acsess_manager
 import autoclean
+import argparse
 
 from trash import Trash
 from acsess_manager import AcsessManager
-
 
 
 class MyRm(object):
@@ -96,22 +96,106 @@ class MyRm(object):
                 
                 
     @lock_decodator            
-    def autoclean(self, path=None, recursive=False): 
+    def autoclean(self): 
         if  self.ascmanager.autocleanAcsess():
             autoclean.autoclean(self.tr)
 
 
-def getrm():
-    logging.basicConfig(level = logging.DEBUG)
+def getDefaultMyRm():
     cfg = config.getDefaultConfig()
-    return MyRm(cfg)   
-    
+    return MyRm(cfg)
+
+
+
 def main():
+    parser = argparse.ArgumentParser(prog='myrm')
+    
+    parser.add_argument('command',choices=['rm', 'rs', 'ls', 'clear', 'autoclear'])
+    parser.add_argument('filemask')
+    parser.add_argument('-r','-R','--recursive',dest='recursive', action='store_true')
+    parser.add_argument('-o','--old',dest='old', default=0)
+    
+    parser.add_argument('--config', default=None)
+    parser.add_argument('--jsonconfig', default=None)
+    
+    parser.add_argument('-v','--verbose',dest='verbose', action='store_const', const=True)
+    parser.add_argument('-d','--dryrun',dest='dryrun', action='store_const', const=True)
+    parser.add_argument('-f','--force',dest='force', action='store_const', const=True)
+    parser.add_argument('-i','--interactive',dest='interactive', action='store_const', const=True)
+    
+    
+    args = parser.parse_args()
     cfg = config.getDefaultConfig()
+    
+    if not args.config is None:
+        cfg = config.loadFromCFG(args.config)
+        
+    if not args.jsonconfig is None:
+        cfg = config.loadFromJSON(args.config)
+        
+    
+    if not args.force is None:
+        cfg['force'] = args.force
+    if not args.dryrun is None:
+        cfg['dryrun'] = args.dryrun
+    if not args.verbose is None:
+        cfg['verbose'] = args.verbose
+    if not args.interactive is None:
+        cfg['interactive'] = args.interactive
+        
     mrm = MyRm(cfg)
     
+    cmd = args.command
+    if cmd == 'rm':
+        mrm.rm(args.filemask, recursive=args.recursive)
+    elif cmd == 'rs':
+        mrm.rs(args.filemask, recursive=args.recursive, old=args.old)
+    elif cmd== 'ls':
+        mrm.ls(args.filemask, recursive=args.recursive)
+    elif cmd == 'clear':
+        mrm.clean(args.filemask, recursive=args.recursive, old=args.old)
+    elif cmd == 'autoclear':
+        mrm.autoclean()
+        
+def mrm():
+    parser = argparse.ArgumentParser(prog='myrm')
+    
+    parser.add_argument('filemask')
+    parser.add_argument('-r','-R','--recursive',dest='recursive', action='store_true')
+    
+    parser.add_argument('--config', default=None)
+    parser.add_argument('--jsonconfig', default=None)
+    
+    parser.add_argument('-v','--verbose',dest='verbose', action='store_const', const=True)
+    parser.add_argument('-d','--dryrun',dest='dryrun', action='store_const', const=True)
+    parser.add_argument('-f','--force',dest='force', action='store_const', const=True)
+    parser.add_argument('-i','--interactive',dest='interactive', action='store_const', const=True)
+    
+    
+    args = parser.parse_args()
+    cfg = config.getDefaultConfig()
+    
+    if not args.config is None:
+        cfg = config.loadFromCFG(args.config)
+        
+    if not args.jsonconfig is None:
+        cfg = config.loadFromJSON(args.config)
+        
+    
+    if not args.force is None:
+        cfg['force'] = args.force
+    if not args.dryrun is None:
+        cfg['dryrun'] = args.dryrun
+    if not args.verbose is None:
+        cfg['verbose'] = args.verbose
+    if not args.interactive is None:
+        cfg['interactive'] = args.interactive
+        
+    mrm = MyRm(cfg)
+    mrm.rm(args.filemask, recursive=args.recursive)   
     
 if __name__ == "__main__":
-    main()
+    main() 
+
         
         
