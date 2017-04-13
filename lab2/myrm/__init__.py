@@ -37,33 +37,46 @@ class MyRm(object):
     @lock_decodator
     def rm(self, filename, recursive=False):
         path, filemask = os.path.split(filename)
-        for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask), recursive):
+        for path in utils.search(path, filemask, filemask, recursive=recursive):
             if  self.ascmanager.removeAcsess(path):
                 self.tr.add(path)                        
         
         
     @lock_decodator
-    def ls(self, filename='.', recursive=False, old=0):
+    def ls(self, filename='.', recursive=False, versions=True):
         filename = self.tr.toInternal(filename)
         path, filemask = os.path.split(filename)
     
-        for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive=recursive, findall=True):
+        files  = utils.search(path, filemask, filemask+'.*.*', 
+                              recursive=recursive, findall=True)
+        vfiles = utils.timefilesToFileDict(files)
+        for path in vfiles:
             
-            isdir = os.path.isdir(path)
-            f, time = self.tr.toExternal(path)
-            if isdir:
-                print('dir: ' + f)
-            else:
-                f, time = self.tr.toExternal(path)
-                print('file: ' +  f + ' ' + time.isoformat())
-        
+            for dtime in vfiles[path]:
+                isdir = os.path.isdir(path)
+                if isdir:
+                    print('dir: ' + path)
+                else:
+                    f, time = self.tr.toExternal(path)
+                    print('file: ' +  path + ' ' + dtime.isoformat())
+                
+                if not versions:
+                    break
+            
     @lock_decodator
     def rs(self, filename, recursive=False, old=0):
         filename = self.tr.toInternal(filename)
         path, filemask = os.path.split(filename) 
-        for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask+'.*.*'), recursive=recursive):
-            if  self.ascmanager.restoreAcsess(self.tr.toExternal(path)):
-                self.tr.rs(path)
+        
+        files = utils.search(path, filemask, filemask+'.*.*', recursive=recursive)
+        vfiles = utils.timefilesToFileDict(files)
+        
+        for path in vfiles:
+            ln = len(vfiles[path])
+            vers = old if old < ln  else ln - 1 
+            filename = utils.addstamp(path, vfiles[path][vers])
+            if  self.ascmanager.restoreAcsess(self.tr.toExternal(filename)):
+                self.tr.rs(filename)
         
 
     @lock_decodator
@@ -71,9 +84,15 @@ class MyRm(object):
         path, filemask = os.path.split(path)
         path = self.tr.toInternal(path)
         
-        for path in utils.search(path, fnmatch.translate(filemask), fnmatch.translate(filemask + '.*.*'),  recursive):
-            if  self.ascmanager.cleanAcsess(self.tr.toExternal(path)):
-                self.tr.rm(path)
+        files = utils.search(path, filemask, filemask + '.*.*',  recursive=recursive)
+        vfiles = utils.timefilesToFileDict(files)
+        
+        for path in vfiles:
+            ln = len(vfiles[path])
+            vers = old if old < ln  else ln - 1 
+            filename = utils.addstamp(path, vfiles[path][vers])
+            if  self.ascmanager.cleanAcsess(self.tr.toExternal(filename)):
+                self.tr.rm(filename)
                 
                 
     @lock_decodator            

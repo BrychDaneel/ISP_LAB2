@@ -40,16 +40,10 @@ def _autocleanByTrashSize(trash, file_time):
 
 def _cleanBySameCount(trash, file_time):
     nf = file_time[:]
-
-    d = {}
-    for f, t in nf:            
-        if not f in d:
-            d[f]=[]
-        d[f].append(t)
     
+    d = utils.file_timeToFileDict(nf)
     
     for key, val in d.iteritems():
-        val.sort(reverse=True)
         if len(val) > trash.cfg["trash"]["autoclean"]["samename"]:
             for dt in val[trash.cfg["trash"]["autoclean"]["samename"]:]:
                 logging.debug("Removing {} becouse  there are a lot of same file".format(utils.addstamp(key, dt)))
