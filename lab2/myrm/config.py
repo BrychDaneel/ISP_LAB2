@@ -1,76 +1,133 @@
 # -*- coding: utf-8 -*- 
 
+
+"""Содержит функции для работы с объектом конфигурации myrm.
+
+Объект конфигурации представляет собой 
+словарь произвольной вложенности.
+
+"""
+
+
 import json
+
                 
-def getDefaultConfig():
-    res = {}
-    res['force'] = True
-    res['dryrun'] = True
-    res['verbose'] = True
-    res['interactive'] = False
+def get_default_config():
+    """Возвращает программно заданный словарь конфигураций.
+    """
+    result = {}
+    result["force"] = True
+    result["dryrun"] = True
+    result["verbose"] = True
+    result["interactive"] = False
     
-    res['trash'] = {}
-    res['trash']['dir'] = "./trash"
-    res['trash']['lockfile'] = "lock"
-    res['trash']['allowautoclean'] = True
+    result["trash"] = {}
+    result["trash"]["dir"] = "./trash"
+    result["trash"]["lockfile"] = "lock"
+    result["trash"]["allowautoclean"] = True
     
-    res['trash']['max'] = {}
-    res['trash']['max']['size'] = 1024
-    res['trash']['max']['count'] = 5
+    result["trash"]["max"] = {}
+    result["trash"]["max"]["size"] = 1024
+    result["trash"]["max"]["count"] = 5
     
-    res['trash']['autoclean'] = {}
-    res['trash']['autoclean']['size'] = 300
-    res['trash']['autoclean']['count'] = 10
-    res['trash']['autoclean']['days'] = 1
-    res['trash']['autoclean']['samename'] = 2
+    result["trash"]["autoclean"] = {}
+    result["trash"]["autoclean"]["size"] = 300
+    result["trash"]["autoclean"]["count"] = 10
+    result["trash"]["autoclean"]["days"] = 1
+    result["trash"]["autoclean"]["samename"] = 2
     
     return res
 
 
-def saveToJSON(cfg, filename):
-    with open(filename, mode='w') as f:
+def save_to_JSON(cfg, filename):
+    """Сохраняет объект конфигурации в JSON файл.
+    
+    Позицонные аргументы:
+    cfg -- объект конфигурации
+    filename -- имя выходного файла
+    
+    """
+    with open(filename, mode="w") as f:
         json.dump(cfg, f, indent=2)  
 
 
-def loadFromJSON(filename):
-    with open(filename, mode='r') as f:
+def load_from_JSON(filename):
+    """Загружает объект конфигурации из файла.
+    
+    Позицонные аргументы:
+    filename -- имя входного файла
+    
+    """
+    with open(filename, mode="r") as f:
         return json.load(f)  
 
 
-def _recursiveSaveToCfg(fp, dct, prefix=""):
+def _recursive_save_to_CFG(output, dct, prefix=""):
+    """Рекурсивно выводит словарь в поток.
+    
+    Позицонные аргументы:
+    output -- выходной поток
+    dct -- словарь для записи
+    prefix -- префикс для всех ключей
+    
+    Значение преобразуется в строку через repr. Ключ через str.
+    
+    """
     for key in dct:
-        
         if len(prefix)>0:
-            node = prefix + '.' + key
+            node = prefix + "." + key
         else:
             node = key
-         
         if isinstance(dct[key], dict):
-            _recursiveSaveToCfg(fp, dct[key], node)
+            _recursiveSaveToCfg(output, dct[key], node)
         else:
-            fp.write("\n{node!s} = {value!r}\n".format(node=node, value=dct[key]))
+            fmt = "\n{node!s} = {value!r}\n"
+            line = fmt.format(node=node, value=dct[key])
+            output.write(line)
         
 
-def saveToCFG(cfg, filename):
-    with open(filename, mode='w') as f:
+def save_to_CFG(cfg, filename):
+    """Сохраняет объект конфигурации в CFG подобный формат.
+    
+    В данном формате возможно хранить данные в следующем виде:
+    Ключ[.субключ[.субключ]] = Значение
+    При использовании субключей создается вложенный слорварь.
+    Символ # обозначает коментарии.
+    
+    Позицонные аргументы:
+    cfg -- объект конфигурации
+    filename -- имя выходного файла
+    
+    """
+    with open(filename, mode="w") as f:
         _recursiveSaveToCfg(f, cfg)  
 
 
-def loadFromCFG(filename):
-    res = getDefaultConfig()
+def load_from_CFG(filename):
+    """Загружает объект конфигурации в CFG подобный формат.
+        
+    В данном формате возможно хранить данные в следующем виде:
+    Ключ[.субключ[.субключ]] = Значение
+    При использовании субключей создается вложенный слорварь.
+    Символ # обозначает коментарии.
     
-    with open(filename, mode='r') as f:
+    Позицонные аргументы:
+    filename -- имя входного файла  
+    
+    """
+    result = getDefaultConfig()
+    with open(filename, mode="r") as f:
         for line in f.readlines():
-            ln = line.partition('#')[0]
-            ln = ln.split('=')
-            if (len(ln) == 2):
-                node = ln[0]
-                value = ln[1]
-                nodepath = node.split('.')
-                value  = eval(value)
+            line = line.partition("#")[0]
+            node_value = ln.split("=")
+            if (len(node_value) == 2):
+                node = node_value[0]
+                value = node_value[1]
+                node_path = node.split(".")
+                value = eval(value)
                 
-                point = res
-                for key in nodepath[0:-1]:
+                point = result
+                for key in node_path[0:-1]:
                     key = key.strip()
                     if not (key in point):
                         point[key] = {}
@@ -78,4 +135,5 @@ def loadFromCFG(filename):
                     
                 key = nodepath[-1].strip()
                 point[key] = value
-    return res
+    return result
+

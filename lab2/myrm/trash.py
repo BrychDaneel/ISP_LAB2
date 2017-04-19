@@ -106,10 +106,11 @@ class Trash(object):
         os.rmdir(oldname)
 
     @needlock_decodator        
-    def rsfile(self, filename):
+    def rsfile(self, filename, old=0):
+        filename = getfile(filename, old)
+        
         oldname = os.path.abspath(filename)
         newname = self.toExternal(oldname)[0]
-            
         
         if not os.path.exists(os.path.dirname(newname)):
             logging.debug("Make dir {} ".format( newname))
@@ -119,7 +120,7 @@ class Trash(object):
         os.rename(oldname, newname) 
             
     @needlock_decodator        
-    def rsdir(self, dirname):
+    def rsdir(self, dirname, old=0):
         oldname = os.path.abspath(dirname)
         newname =  self.toExternal(oldname)[0]
         
@@ -137,18 +138,17 @@ class Trash(object):
                 self.rsfile(full)
                 
     @needlock_decodator                
-    def rs(self, path):
+    def rs(self, path, old=0):
        
         if os.path.isdir(path):
-            self.rsdir(path)
+            self.rsdir(path, old=old)
         else:
-            self.rsfile(path)
+            self.rsfile(path, old=old)
         return True
     
     
     @needlock_decodator        
     def add(self, path):
-        
         newsize = self.size + utils.size(path)
         newcount = self.elems + utils.filecount(path)
         assert(newsize <= self.cfg["trash"]["max"]["size"])
@@ -165,13 +165,17 @@ class Trash(object):
         return True
             
     @needlock_decodator           
-    def rm(self, path):
+    def rm(self, path, old=-1):
        
         newsize = self.size - utils.size(path)
         newcount = self.elems - utils.filecount(path)
        
         if not os.path.isdir(path):
-            os.remove(path)
+            if old >= 0:
+                os.remove(utils.getfile(path, old))
+            else:
+                for vers in utils.get_versions(path):
+                    os.remove(utils.addstamp(path, vers))
         else:
             for dirpath, dirnames, filenames in os.walk(path, topdown = True):
                 for f in filenames:

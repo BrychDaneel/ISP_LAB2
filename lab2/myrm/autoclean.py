@@ -1,73 +1,153 @@
 # -*- coding: utf-8 -*- 
 
+"""Здесь собранны функции очистки корзины по разным критериям.
+
+Функции, экспортируемые данным модулем:
+    * _clean_by_date -- очиска по дате удаления
+    * _clean_by_files_count -- очиска по числу файлов
+    * _clean_by_trash_size -- очиска по размеру файлов
+    * _clean_by_same_count -- очиска файлов с одинаковым именем
+    * autoclean -- очистка по всем критериям
+    
+"""
+
+
 import os
 import logging
 import utils
+import stamp
 import datetime
 
-def _autocleanByDate(trash, file_time):        
+
+def _clean_by_date(trash, file_time_list):       
+    """Очищает по дате удаления. Возвращает новый список файлов.
+    
+    Позицонные аргументы:
+    file_time_list -- содержимое корзины. Список кортежей 
+                      (Путь, Время удаления).
+                            
+    """
     now = datetime.datetime.utcnow()
-    oldfiles = filter(lambda (f, t): (now - t).days  > trash.cfg["trash"]["autoclean"]["days"],  file_time)
+    clear_days = trash.cfg["trash"]["autoclean"]["days"]
+    old_files = filter(lambda (f, t): (now - t).days  > clear_days,  
+                       file_time_list)
             
-    for f, t in oldfiles:
-        logging.debug("{} is too old".format(utils.addstamp(f, t)))
-        trash.rm(utils.addstamp(f, t))
-    return list(set(file_time).difference(oldfiles)) 
-
-
-
-def _autocleanByTrashCount(trash, file_time):
-    nft = sorted(file_time,key=lambda (f, t): t, reverse=True) 
-        
-    while trash.cfg["trash"]["autoclean"]["count"] <= trash.elems:
-        f, t = nft[-1]
-        logging.debug("Removing {} to free bukkit({} files excess)".format(
-            utils.addstamp(f, t), trash.elems - trash.cfg["trash"]["autoclean"]["count"] + 1))
-        trash.rm(utils.addstamp(f, t))
-        nft.pop(-1)
-    return nft
-
-def _autocleanByTrashSize(trash, file_time):
-    nft = sorted(file_time,key=lambda (f, t): t, reverse=True) 
-        
-    while trash.cfg["trash"]["autoclean"]["size"] <= trash.size:
-        f, t = nft[-1]
-        logging.debug("Removing {} to free bukkit({} bytes excess)".format(
-            utils.addstamp(f, t), trash.size - trash.cfg["trash"]["autoclean"]["size"]))
-        trash.rm(utils.addstamp(f, t))
-        nft.pop(-1)
-    return nft
-
-def _cleanBySameCount(trash, file_time):
-    nf = file_time[:]
+    for f, t in old_files:
+        path = utils.addstamp(f, t)
+        debug_fmt = "{} is too old"
+        debug_line = debug_fmt.format(path)
+        logging.debug(debug_line)
+        trash.rm(path)
     
-    d = utils.file_timeToFileDict(nf)
+    new_files = set(file_time_list).difference(oldfiles)
+    return list(new_files) 
+
+
+def _clean_by_files_count(trash, file_time_list):
+    """Очищает по числу файлов. Возвращает новый список файлов.
     
-    for key, val in d.iteritems():
-        if len(val) > trash.cfg["trash"]["autoclean"]["samename"]:
-            for dt in val[trash.cfg["trash"]["autoclean"]["samename"]:]:
-                logging.debug("Removing {} becouse  there are a lot of same file".format(utils.addstamp(key, dt)))
-                trash.rm(utils.addstamp(key, dt))
-                nf.remove((key, dt))
-    return nf
+    Позицонные аргументы:
+    file_time_list -- содержимое корзины. Список кортежей 
+                      (Путь, Время удаления).
+    
+    """
+    file_time_list = sorted(file_time_list, key=lambda (f, t): t, 
+                            reverse=True) 
+    
+    clean_count = trash.cfg["trash"]["autoclean"]["count"] 
+    while clean_count <= trash.elems:
+        f, t = file_time_list[-1]
+        path = utils.addstamp(f, t) 
+        debug_fmt = "Removing {} to free bukkit({} files excess)"
+        debug_line = debug_fmt.format(path , trash.elems - clean_count + 1)
+        logging.debug(debug_line)
+        trash.rm(path)
+        file_time_list.pop(-1)
+    return file_time_list
+
+
+def _clean_by_trash_size(trash, file_time):
+    """Очищает по размеру файлов. Возвращает новый список файлов.
+    
+    Позицонные аргументы:
+    file_time_list -- содержимое корзины. Список кортежей 
+                      (Путь, Время удаления).
+    
+    """
+    file_time = sorted(file_time, key=lambda (f, t): t, reverse=True) 
+        
+    clean_size = trash.cfg["trash"]["autoclean"]["size"]
+    while  clean_size <= trash.size:
+        f, t = file_time[-1]
+        path = utils.addstamp(f, t)
+        debug_fmt = "Removing {} to free bukkit({} bytes excess)"
+        debug_line = debug_fmt.format(path, trash.size - clean_size)
+        logging.debug(debug_line)
+        trash.rm(path)
+        file_time.pop(-1)
+    return file_time
+
+
+def _clean_by_same_count(trash, file_time):
+    """Очищает файлы с одинаковые. Возвращает новый список файлов.
+    
+    Позицонные аргументы:
+    file_time_list -- содержимое корзины. Список кортежей 
+                      (Путь, Время удаления).
+    
+    """
+    file_time = file_time[:]
+    dct = stamp.get_file_list_dict(file_time)
+    
+    clean_samename = trash.cfg["trash"]["autoclean"]["samename"] 
+    for path, versions in dct.iteritems():
+        if len(versions) > clean_samename
+            for dtime in versions[clean_samename:]:
+                full_path = utils.addstamp(path, dtime)
+                debug_fmt = "Removing {} becouse  there are a lot of same file"
+                debug_line = debug_fmt.format(full_path)
+                logging.debug(debug_line)
+                trash.rm(full_path)
+                file_time.remove((path, dtime))
+    return file_time
                 
 
 def autoclean(trash):
-    waslocked = trash.locked
-    if not waslocked:
+    """Производит очиску корзины по различным критериям.
+    
+    Позицонные аргументы:
+    * trash -- объект корзины
+    
+    Критерии очистки:
+    * по дате удаления
+    * по числу файлов
+    * по размеру файлов
+    * очиска файлов с одинаковым именем
+    
+    Информациия для очистки берется из файла конфингурации корзины.
+    
+    Перед началом работы проверяет блокировку корзины и блокирует,
+    если она отсутствует.
+    
+    """
+    was_locked = trash.locked
+    if not was_locked:
         trash.lock()
     
     files = []
     for dirpath, dirnames, filenames in os.walk(trash.dirpath):
         files.extend([os.path.join(dirpath, f) for f in filenames])
         
-    files = filter(lambda fn: not os.path.samefile(fn, trash.fullLockfile()), files)
-            
-    file_time = [utils.splitstamp(f) for f in files]
-    file_time = _autocleanByDate(trash, file_time)
-    file_time = _autocleanByTrashCount(trash, file_time)
-    file_time = _autocleanByTrashSize(trash, file_time)
-    file_time = _cleanBySameCount(trash, file_time)
+    full_lock_path = trash.fullLockfile()
+    files = filter(lambda fn: not os.path.samefile(fn, full_lock_path), 
+                   files)
+    
+    file_time_list = [stamp.splitstamp(f) for f in files]
+    file_time_list = _clean_by_date(trash, file_time_list)
+    file_time_list = _clean_by_same_count(trash, file_time_list)
+    file_time_list = _clean_by_files_count(trash, file_time_list)
+    file_time_list = _clean_by_trash_size(trash, file_time_list)
 
-    if not waslocked:
+    if not was_locked:
         trash.unlock()
+
