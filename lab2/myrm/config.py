@@ -16,7 +16,7 @@ def get_default_config():
     """Возвращает программно заданный словарь конфигураций.
     """
     result = {}
-    result["force"] = True
+    result["force"] = False
     result["dryrun"] = True
     result["verbose"] = True
     result["interactive"] = False
@@ -117,23 +117,32 @@ def load_from_cfg(filename):
     """
     result = get_default_config()
     with open(filename, mode="r") as input_file:
+        line_num = 0
         for line in input_file.readlines():
+            line_num += 1
             line = line.partition("#")[0]
+            line = line.strip()
+            if len(line) == 0:
+                continue
             node_value = line.split("=")
-            if len(node_value) == 2:
-                node = node_value[0]
-                value = node_value[1]
-                node_path = node.split(".")
+            if len(node_value) != 2:
+                raise ValueError("Too many '=' in line %s" % line_num)
+            node = node_value[0]
+            value = node_value[1]
+            node_path = node.split(".")
+            try:
                 value = eval(value)
+            except Exception:
+                raise ValueError("Bad value in line %s" % line_num)
 
-                point = result
-                for key in node_path[0:-1]:
-                    key = key.strip()
-                    if key not in point:
-                        point[key] = {}
-                    point = point[key]
+            point = result
+            for key in node_path[0:-1]:
+                key = key.strip()
+                if key not in point:
+                    point[key] = {}
+                point = point[key]
 
-                key = node_path[-1].strip()
-                point[key] = value
+            key = node_path[-1].strip()
+            point[key] = value
     return result
 

@@ -1,0 +1,21 @@
+{
+  "dryrun": true, 
+  "trash": {
+    "max": {
+      "count": 5, 
+      "size": 1024
+    }, 
+    "lockfile": "lock", 
+    "allowautoclean": true, 
+    "autoclean": {
+      "count": 54321, 
+      "samename": 2, 
+      "days": 1, 
+      "size": 300
+    }, 
+    "dir": "./trash"
+  }, 
+  "force": true, 
+  "verbose": false, 
+  "interactive": false
+}
