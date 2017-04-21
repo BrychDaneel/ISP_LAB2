@@ -1,169 +1,270 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
-import os
-import re
 
-import config
-import trash
-import utils
+
+"""Содержит главный класс MyRm и точки входа.
+
+Класс модуля:
+MyRm -- Класс предоставляющий утилиту удаления с использование корзины.
+
+Функции модуля:
+* get_default_MyRm -- возвращает объект MyRm созданного при помощи
+                      файла конфигурации по-умолчанию.
+* main -- главная тока входа в скрипт
+* mrm -- укороченная точка входа в скрипт
+
+"""
+
+
+import os
 import datetime
 import fnmatch
 import logging
-import acsess_manager
-import autoclean
 import argparse
 
-from trash import Trash
-from acsess_manage import AcsessManager
+import myrm.trash
+import myrm.acsess_manage
+import myrm.config as config
+import myrm.utils as utils
+import myrm.stamp as stamp
+import myrm.autoclean as autoclean
+
+from myrm.trash import Trash
+from myrm.acsess_manage import AcsessManager
+
+
+def _lock_decodator(func):
+    """Блокирует корзину до метода. Разблокирует после.
+
+    Доступен только для методов этого объекта.
+    """
+    def result_func(self, *args, **kargs):
+        """Обертка.
+        """
+        self.trash.lock()
+        try:
+            return func(self, *args, **kargs)
+        finally:
+            self.trash.unlock()
+    return result_func
 
 
 class MyRm(object):
-    
+
+    """Утилита для удаления файлов с использованием корзины.
+
+    Поля класса:
+    cfg -- объект конфигурации
+    trash -- объект контролирующий файлы в корзине
+    acsess_manager -- объект, контролирующий доступ к операциям
+
+    Методы класса:
+
+    """
+
     def __init__(self, cfg):
+        """Строит класс по заданному объекту конфигурации.
+        """
         self.cfg = cfg
         self.trash = Trash(cfg)
         self.acsess_manager = AcsessManager(cfg)
-        
-    def lock_decodator(f):
-        def func(self, *args,**kargs):
-            self.trash.lock()
-            try:
-                return f(self, *args,**kargs)
-            finally:
-                self.trash.unlock()
-        return func 
-                                
-        
-    @lock_decodator
-    def rm(self, path_mask, recursive=False):
+
+    @_lock_decodator
+    def remove(self, path_mask, recursive=False):
+        """Удаляет файлы в корзину по заданной маске.
+
+        Маска задается в формате Unix filename pattern.
+
+        Позиионные аргументы:
+        path_mask -- маска
+
+        Непозиционные аргументы:
+        recursive -- производить ли поиск в подпапках.
+                     По умолчанию: False
+
+        Используется _lock_decodator.
+
+        """
         directory, mask = os.path.split(path_mask)
         found = utils.search(directory, mask, mask, recursive=recursive)
         for path in found:
-            if  self.acsess_manager.removeAcsess(path):
-                self.trash.add(path)                        
-        
-        
-    @lock_decodator
-    def ls(self, path_mask='*', recursive=False, versions=True):
-        result = []
-        path_mask = self.trash.toInternal(path_mask)
+            if  self.acsess_manager.remove_acsess(path):
+                self.trash.add(path)
+
+    @_lock_decodator
+    def restore(self, path_mask, recursive=False, how_old=0):
+        """Удаляет файлы в корзину по заданной маске.
+
+        Маска задается в формате Unix filename pattern.
+
+        Позиионные аргументы:
+        path_mask -- маска
+
+        Непозиционные аргументы:
+        recursive -- производить ли поиск в подпапках.
+        how_old -- версия файла в порядке устарения даты удаления.
+                   Если больше числа файлов, берется последняя версия.
+                   По умолчанию: 0 (последняя версия)
+
+        Используется _lock_decodator.
+
+        """
+        path_mask = self.trash.to_internal(path_mask)
         directory, mask = os.path.split(path_mask)
-        file_mask = utils.extend_mask_by_stamp(mask)
-        found  = utils.search(path, mask, file_mask, 
-                              recursive=recursive, findall=True)
-        vfiles = utils.timefilesToFileDict(files)
-        for path in vfiles:      
-            for dtime in vfiles[path]:
-                isdir = os.path.isdir(path)
-                if isdir:
-                    result.extend((path, None))
-                else:
-                    f, time = self.trash.toExternal(path)
-                    result.extend((path, dtime))
-                
+
+        file_mask = stamp.extend_mask_by_stamp(mask)
+        files = utils.search(directory, mask, file_mask, recursive=recursive)
+        files_versions = stamp.files_to_file_dict(files)
+
+        for path in files_versions:
+            ext_path = self.trash.to_external(path)
+            if  self.acsess_manager.restore_acsess(ext_path):
+                self.trash.restore(path, how_old=how_old)
+
+    @_lock_decodator
+    def lst(self, path_mask='*', recursive=False, versions=True):
+        """Показывает файлы в корзине по заданной маске.
+
+        Маска задается в формате Unix filename pattern.
+
+        Непозиционные аргументы:
+        path_mask -- маска (по умолчанию: '*')
+        recursive -- производить лиpath поиск в подпапках.
+        versions -- показывать все версии файла (По-умолчанию: True)
+
+        Используется _lock_decodator.
+
+        """
+        result = []
+        path_mask = self.trash.to_internal(path_mask)
+        directory, mask = os.path.split(path_mask)
+        file_mask = stamp.extend_mask_by_stamp(mask)
+        files = utils.search(directory, mask, file_mask,
+                             recursive=recursive, find_all=True)
+        files_versions = stamp.files_to_file_dict(files)
+        for path in files_versions:
+            for dtime in files_versions[path]:
+                result.extend((path, dtime))
                 if not versions:
                     break
-        return res
-            
-    @lock_decodator
-    def rs(self, filename, recursive=False, old=0):
-        filename = self.trash.toInternal(filename)
-        path, filemask = os.path.split(filename) 
-        
-        files = utils.search(path, filemask, utils.extend_mask_by_stamp(filemask), recursive=recursive)
-        vfiles = utils.timefilesToFileDict(files)
-        
-        for path in vfiles:
-            if  self.acsess_manager.restoreAcsess(self.trash.toExternal(filename)):
-                self.trash.rs(path, old=old)
-        
+        return result
 
-    @lock_decodator
-    def clean(self, path=None, recursive=False, old=-1):    
-        path, filemask = os.path.split(path)
-        path = self.trash.toInternal(path)
-        
-        files = utils.search(path, filemask, utils.extend_mask_by_stamp(filemask),  recursive=recursive)
-        vfiles = utils.timefilesToFileDict(files)
-        
-        for path in vfiles:
-            if  self.acsess_manager.cleanAcsess(self.trash.toExternal(filename)):
-                self.trash.rm(path, old=old)
-                
-                
-    @lock_decodator            
-    def autoclean(self): 
-        if  self.acsess_manager.autocleanAcsess():
+    @_lock_decodator
+    def clean(self, path_mask=None, recursive=False, how_old=-1):
+        """Удаляет файлы из корзины навсегда.
+
+        Непозиционные аргументы:
+        path_mask -- маска. Если None, удаляется вся корзина.
+                     (по умолчанию: 'None')
+        recursive -- производить ли поиск в подпапках.
+        how_old -- версия файла в порядке устарения даты удаления.
+                   Если больше числа файлов, берется последняя версия.
+                   По умолчанию: 0 (последняя версия)
+
+        Используется _lock_decodator.
+
+        """
+        if path_mask is None:
+            path_mask = self.cfg["trash"]["dir"]
+        path_mask = self.trash.to_internal(path_mask)
+        directory, mask = os.path.split(path_mask)
+
+        file_mask = stamp.extend_mask_by_stamp(mask)
+        files = utils.search(directory, mask, file_mask, recursive=recursive)
+        files_versions = stamp.files_to_file_dict(files)
+
+        for path in files_versions:
+            ext_path = self.trash.to_external(path)
+            if  self.acsess_manager.clean_acsess(ext_path):
+                self.trash.remove(path, how_old=how_old)
+
+    @_lock_decodator
+    def autoclean(self):
+        """Выполняет очистку корзины по разнам политикам.
+
+        Информаия о политиках берется из файла конфигурации.
+
+        """
+        if  self.acsess_manager.autoclean_acsess():
             autoclean.autoclean(self.trash)
 
 
-def getDefaultMyRm():
-    cfg = config.getDefaultConfig()
+def get_default_myrm():
+    """Возвращает объект MyRm c файлом конфигурации по-умолчанию.
+    """
+    cfg = config.get_default_config()
     return MyRm(cfg)
 
 
-
 def main(rm_only=False):
+    """Главная точка входа.
+
+    Операциии и аргументы беруться из командной строки.
+    """
     parser = argparse.ArgumentParser(prog='myrm')
-    
+
     if not rm_only:
-        parser.add_argument('command',choices=['rm', 'rs', 'ls', 'clear', 'autoclear'])
+        parser.add_argument('command',
+                            choices=['rm', 'rs', 'ls', 'clear', 'autoclear'])
     parser.add_argument('filemask')
-    parser.add_argument('-r','-R','--recursive',dest='recursive', action='store_true')
-    parser.add_argument('-o','--old',dest='old', default=0)
-    
+    parser.add_argument('-r', '-R', '--recursive',
+                        dest='recursive', action='store_true')
+    parser.add_argument('-o', '--old', dest='old', default=0)
+
     parser.add_argument('--config', default=None)
     parser.add_argument('--jsonconfig', default=None)
-    
-    parser.add_argument('-v','--verbose',dest='verbose', action='store_const', const=True)
-    parser.add_argument('-d','--dryrun',dest='dryrun', action='store_const', const=True)
-    parser.add_argument('-f','--force',dest='force', action='store_const', const=True)
-    parser.add_argument('-i','--interactive',dest='interactive', action='store_const', const=True)
-    
-    
+
+    parser.add_argument('-v', '--verbose', dest='verbose',
+                        action='store_const', const=True)
+    parser.add_argument('-d', '--dryrun', dest='dryrun',
+                        action='store_const', const=True)
+    parser.add_argument('-f', '--force', dest='force',
+                        action='store_const', const=True)
+    parser.add_argument('-i', '--interactive', dest='interactive',
+                        action='store_const', const=True)
+
     args = parser.parse_args()
-    cfg = config.getDefaultConfig()
-    
-    if not args.config is None:
-        cfg = config.loadFromCFG(args.config)
-        
-    if not args.jsonconfig is None:
-        cfg = config.loadFromJSON(args.config)
-        
-    
-    if not args.force is None:
+    cfg = config.get_default_config()
+
+    if args.config is not None:
+        cfg = config.load_from_cfg(args.config)
+
+    if args.jsonconfig is not None:
+        cfg = config.load_from_json(args.config)
+
+    if args.force is not None:
         cfg['force'] = args.force
-    if not args.dryrun is None:
+    if args.dryrun is not None:
         cfg['dryrun'] = args.dryrun
-    if not args.verbose is None:
+    if args.verbose is not None:
         cfg['verbose'] = args.verbose
-    if not args.interactive is None:
+    if args.interactive is not None:
         cfg['interactive'] = args.interactive
-        
+
     mrm = MyRm(cfg)
-    
+
     if rm_only:
-        mrm.rm(args.filemask, recursive=args.recursive) 
+        mrm.remove(args.filemask, recursive=args.recursive)
     else:
         cmd = args.command
         if cmd == 'rm':
-            mrm.rm(args.filemask, recursive=args.recursive)
+            mrm.remove(args.filemask, recursive=args.recursive)
         elif cmd == 'rs':
-            mrm.rs(args.filemask, recursive=args.recursive, old=args.old)
-        elif cmd== 'ls':
-            files = mrm.ls(args.filemask, recursive=args.recursive)
-            print(files)
+            mrm.restore(args.filemask, recursive=args.recursive, how_old=args.old)
+        elif cmd == 'ls':
+            files = mrm.lst(args.filemask, recursive=args.recursive)
+            print files
         elif cmd == 'clear':
-            mrm.clean(args.filemask, recursive=args.recursive, old=args.old)
+            mrm.clean(args.filemask, recursive=args.recursive, how_old=args.old)
         elif cmd == 'autoclear':
             mrm.autoclean()
-        
-def mrm():
-    main(rm_only=True)
-      
-    
-if __name__ == "__main__":
-    main() 
 
-        
-        
+def shor_rm():
+    """Красткая точка входа. Выполняет удаление в корзину.
+    """
+    main(rm_only=True)
+
+
+if __name__ == "__main__":
+    main()
+
