@@ -15,7 +15,7 @@
     }, 
     "dir": "./trash"
   }, 
-  "force": true, 
+  "force": false, 
   "verbose": false, 
   "interactive": false
 }

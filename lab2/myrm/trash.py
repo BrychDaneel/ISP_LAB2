@@ -101,7 +101,8 @@ class Trash(object):
             os.makedirs(thash_dir)
 
         lock_file = self.lock_file_path()
-        assert not os.path.exists(lock_file)
+        if os.path.exists(lock_file):
+            raise AssertionError("Lock file already exists.")
         open(lock_file, "w").close()
         self.thash_dir = thash_dir
 
@@ -151,7 +152,7 @@ class Trash(object):
         protocol_code = ' '.join([str(ord(char)) for char in protocol])
         splitted_path[0] = protocol_code
 
-        new_path = os.path.join(thash_dir, splitted_path)
+        new_path = os.path.join(thash_dir, *splitted_path)
         return new_path
 
     def to_external(self, path):
@@ -173,7 +174,6 @@ class Trash(object):
         splitted_path[0] = protocol
         path = os.path.join(*splitted_path)
 
-        path = os.path.relpath(path)
         return path
 
     def add_file(self, file_name):
@@ -248,9 +248,9 @@ class Trash(object):
         Файл переповешивается из папке корзины в корень.
 
         """
-        old_name = stamp.get_version(file_name, how_old)
-        old_name = os.path.abspath(old_name)
-        new_name = self.to_external(old_name)
+        new_name = os.path.abspath(file_name)
+        old_name = self.to_internal(new_name)
+        old_name = stamp.get_version(old_name, how_old)
 
         if not os.path.exists(os.path.dirname(new_name)):
             logging.debug("Make dir {directory} ", directory=new_name)
@@ -278,16 +278,18 @@ class Trash(object):
         востанавливаются файлы.
 
         """
-        old_name = os.path.abspath(dir_name)
-        new_name = self.to_external(old_name)
+        new_name = os.path.abspath(dir_name)
+        old_name = self.to_internal(new_name)
 
         if not os.path.exists(new_name):
             logging.debug("Make dir {directory} ", directory=new_name)
             os.makedirs(new_name)
 
-        for element in os.listdir(dir_name):
-            path = os.path.join(dir_name, element)
-            isdir = os.path.isdir(path)
+        for element in os.listdir(old_name):
+            element = stamp.split_stamp(element)[0]
+            real_path = os.path.join(old_name, element)
+            path = os.path.join(new_name, element)
+            isdir = os.path.isdir(real_path)
             if  isdir:
                 self.rs_dir(path, how_old=how_old)
             else:
@@ -326,7 +328,7 @@ class Trash(object):
 
     @_need_lock_decodator
     def restore(self, path, how_old=0):
-        """Добавляет элемент в корзину.
+        """Востанавливает элемент из корзины.
 
         Работа возможна только во время блокировки корзины.
 
@@ -341,10 +343,17 @@ class Trash(object):
         количество файлов в ней.
 
         """
-        new_size = self.trash_size + utils.files_size(path)
-        new_count = self.files_count + utils.files_count(path)
-
-        if os.path.isdir(path):
+        
+        new_path = os.path.abspath(path)
+        old_path = self.to_internal(new_path)
+        
+        full_path = old_path
+        if not os.path.isdir(full_path):
+            full_path = stamp.get_version(full_path, how_old)
+        new_size = self.trash_size + utils.files_size(full_path)
+        new_count = self.files_count + utils.files_count(full_path)
+        
+        if os.path.isdir(old_path):
             self.rs_dir(path, how_old=how_old)
         else:
             self.rs_file(path, how_old=how_old)
@@ -371,19 +380,30 @@ class Trash(object):
         количество файлов в ней.
 
         """
-        new_size = self.trash_size - utils.files_size(path)
-        new_count = self.files_count - utils.files_count(path)
+        path = self.to_internal(path)
+        
+        new_size = self.trash_size
+        new_count = self.files_count
 
         if not os.path.isdir(path):
             if how_old >= 0:
-                os.remove(stamp.get_version(path, how_old))
+                full_path = stamp.get_version(path, how_old)
+                new_size = new_size - utils.files_size(full_path)
+                new_count = new_count - utils.files_count(full_path)
+                os.remove(full_path)
             else:
                 for vers in stamp.get_versions_list(path):
-                    os.remove(stamp.add_stamp(path, vers))
+                    full_path = stamp.add_stamp(path, vers)
+                    new_size = new_size - utils.files_size(full_path)
+                    new_count = new_count - utils.files_count(full_path)
+                    os.remove(full_path)
         else:
-            for dirpath, dirnames, filenames in os.walk(path, topdown=True):
+            new_size = new_size - utils.files_size(path)
+            new_count = new_count - utils.files_count(path)   
+            
+            for dirpath, dirnames, filenames in os.walk(path, topdown=False):
                 for element in filenames:
-                    os.remove(element)
+                    os.remove(os.path.join(dirpath, element))
                 os.rmdir(dirpath)
 
         self.trash_size = new_size
