@@ -167,6 +167,7 @@ class Trash(object):
         """
         thash_dir = self.cfg["trash"]["dir"]
         path = os.path.abspath(path)
+        assert(os.path.commonprefix((path, thash_dir)) == thash_dir)
         path = os.path.relpath(path, thash_dir)
         splitted_path = utils.split_path(path)[1:]
         protocol_code = splitted_path[0]
@@ -311,9 +312,11 @@ class Trash(object):
         количество файлов в ней.
 
         """
-        new_size = self.trash_size + utils.files_size(path)
-        new_count = self.files_count + utils.files_count(path)
-
+        delta_size = utils.files_size(path)
+        delta_count = utils.files_count(path)
+        new_size = self.trash_size + delta_size
+        new_count = self.files_count + delta_count
+        
         assert new_size <= self.cfg["trash"]["max"]["size"]
         assert new_count <= self.cfg["trash"]["max"]["count"]
 
@@ -322,9 +325,10 @@ class Trash(object):
         else:
             self.add_file(path)
 
-        self.trash_size = new_size
+        self.trash_size = new_size 
         self.files_count = new_count
-        return True
+        
+        return delta_count, delta_size
 
     @_need_lock_decodator
     def restore(self, path, how_old=0):
@@ -350,18 +354,18 @@ class Trash(object):
         full_path = old_path
         if not os.path.isdir(full_path):
             full_path = stamp.get_version(full_path, how_old)
-        new_size = self.trash_size + utils.files_size(full_path)
-        new_count = self.files_count + utils.files_count(full_path)
+        delta_size = utils.files_size(full_path)
+        delta_count = utils.files_count(full_path)
         
         if os.path.isdir(old_path):
             self.rs_dir(path, how_old=how_old)
         else:
             self.rs_file(path, how_old=how_old)
 
-        self.trash_size = new_size
-        self.files_count = new_count
+        self.trash_size = self.trash_size - delta_size
+        self.files_count = self.files_count - delta_count
 
-        return True
+        return delta_count, delta_size
 
     @_need_lock_decodator
     def remove(self, path, how_old=-1):
@@ -382,31 +386,59 @@ class Trash(object):
         """
         path = self.to_internal(path)
         
-        new_size = self.trash_size
-        new_count = self.files_count
+        delta_size = 0
+        delta_count = 0
 
         if not os.path.isdir(path):
             if how_old >= 0:
                 full_path = stamp.get_version(path, how_old)
-                new_size = new_size - utils.files_size(full_path)
-                new_count = new_count - utils.files_count(full_path)
+                delta_size = delta_size + utils.files_size(full_path)
+                delta_count = delta_count + utils.files_count(full_path)
                 os.remove(full_path)
             else:
                 for vers in stamp.get_versions_list(path):
                     full_path = stamp.add_stamp(path, vers)
-                    new_size = new_size - utils.files_size(full_path)
-                    new_count = new_count - utils.files_count(full_path)
+                    delta_size = delta_size + utils.files_size(full_path)
+                    delta_count = delta_count + utils.files_count(full_path)
                     os.remove(full_path)
         else:
-            new_size = new_size - utils.files_size(path)
-            new_count = new_count - utils.files_count(path)   
+            delta_size = delta_size + utils.files_size(path)
+            delta_count = delta_count + utils.files_count(path)   
             
             for dirpath, dirnames, filenames in os.walk(path, topdown=False):
                 for element in filenames:
                     os.remove(os.path.join(dirpath, element))
                 os.rmdir(dirpath)
 
-        self.trash_size = new_size
-        self.files_count = new_count
-        return True
+        self.trash_size = self.trash_size - delta_size
+        self.files_count = self.files_count - delta_count
+        return delta_count, delta_size
+    
+    def search(self, path_mask, recursive=False, find_all=False):
+        """Поиск в корзине по маске. Возвращает словарь с версиями.
+        
+        Маска задается в формате Unix filename pattern.
+        Путь задается относительно 
+
+        Позиионные аргументы:
+        path_mask -- маска
+        
+        Непозиционные аргументы:
+        recursive -- производить лиpath поиск в подпапках.
+        find_all -- углублять в подпапки,
+                если они соответствуют маске (по-умолчанию False)
+
+        """
+        path_mask = self.to_internal(path_mask)
+        directory, mask = os.path.split(path_mask)
+
+        if not os.path.exists(directory):
+            return []
+        file_mask = stamp.extend_mask_by_stamp(mask)
+        files = utils.search(directory, mask, file_mask, 
+                             recursive=recursive, find_all=find_all)
+        files = [self.to_external(f) for f in files]
+        files_versions = stamp.files_to_file_dict(files)
+        
+        return files_versions 
 

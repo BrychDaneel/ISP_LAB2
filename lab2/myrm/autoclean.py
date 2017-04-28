@@ -54,7 +54,7 @@ def _clean_by_files_count(trash, file_time_list):
                             reverse=True)
 
     clean_count = trash.cfg["trash"]["autoclean"]["count"]
-    while clean_count <= trash.elems:
+    while clean_count <= trash.files_count:
         file_name, dtime = file_time_list[-1]
         path = stamp.add_stamp(file_name, dtime)
         debug_fmt = "Removing {} to free bukkit({} files excess)"
@@ -76,13 +76,13 @@ def _clean_by_trash_size(trash, file_time):
     file_time = sorted(file_time, key=lambda (f, t): t, reverse=True)
 
     clean_size = trash.cfg["trash"]["autoclean"]["size"]
-    while  clean_size <= trash.size:
+    while  clean_size <= trash.trash_size:
         file_name, dtime = file_time[-1]
         path = stamp.add_stamp(file_name, dtime)
         debug_fmt = "Removing {} to free bukkit({} bytes excess)"
-        debug_line = debug_fmt.format(path, trash.size - clean_size)
+        debug_line = debug_fmt.format(path, trash.trash_size - clean_size)
         logging.debug(debug_line)
-        trash.rm(path)
+        trash.remove(trash.to_internal(path))
         file_time.pop(-1)
     return file_time
 
@@ -134,13 +134,13 @@ def autoclean(trash):
         trash.lock()
 
     files = []
-    for dirpath, dirnames, filenames in os.walk(trash.dirpath):
+    for dirpath, dirnames, filenames in os.walk(trash.thash_dir):
         files.extend([os.path.join(dirpath, f) for f in filenames])
 
-    full_lock_path = trash.fullLockfile()
+    full_lock_path = trash.lock_file_path()
     files = [fn for fn in files if not os.path.samefile(fn, full_lock_path)]
-
     file_time_list = [stamp.split_stamp(f) for f in files]
+    
     file_time_list = _clean_by_date(trash, file_time_list)
     file_time_list = _clean_by_same_count(trash, file_time_list)
     file_time_list = _clean_by_files_count(trash, file_time_list)

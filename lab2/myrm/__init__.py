@@ -50,7 +50,7 @@ def _lock_decodator(func):
 
 
 class MyRm(object):
-
+    
     """Утилита для удаления файлов с использованием корзины.
 
     Поля класса:
@@ -71,7 +71,9 @@ class MyRm(object):
 
     @_lock_decodator
     def remove(self, path_mask, recursive=False):
-        """Удаляет файлы в корзину по заданной маске.
+        """Удаляет фалйы по маске в корзину. 
+        
+        Возвращает количестов удаленных файлов и их размер.
 
         Маска задается в формате Unix filename pattern.
 
@@ -85,15 +87,22 @@ class MyRm(object):
         Используется _lock_decodator.
 
         """
+        size = 0
+        count = 0
         directory, mask = os.path.split(path_mask)
         found = utils.search(directory, mask, mask, recursive=recursive)
         for path in found:
             if  self.acsess_manager.remove_acsess(path):
-                self.trash.add(path)
+                delta_count, delta_size = self.trash.add(path)
+                size += delta_size
+                count += delta_count
+        return count, size
 
     @_lock_decodator
     def restore(self, path_mask, recursive=False, how_old=0):
         """Удаляет файлы в корзину по заданной маске.
+
+        Возвращает количестов удаленных файлов и их размер.
 
         Маска задается в формате Unix filename pattern.
 
@@ -109,21 +118,20 @@ class MyRm(object):
         Используется _lock_decodator.
 
         """
-        path_mask = self.trash.to_internal(path_mask)
-        directory, mask = os.path.split(path_mask)
-
-        file_mask = stamp.extend_mask_by_stamp(mask)
-        files = utils.search(directory, mask, file_mask, recursive=recursive)
-        files_versions = stamp.files_to_file_dict(files)
-
+        size = 0
+        count = 0
+        files_versions = self.trash.search(path_mask, recursive=recursive)
         for path in files_versions:
-            ext_path = self.trash.to_external(path)
+            ext_path = self.trash.to_internal(path)
             if  self.acsess_manager.restore_acsess(ext_path):
-                self.trash.restore(path, how_old=how_old)
+                delta_count_size = self.trash.restore(path, how_old=how_old)
+                count += delta_count_size[0]
+                size += delta_count_size[1]
+        return count, size
 
     @_lock_decodator
     def lst(self, path_mask='*', recursive=False, versions=True):
-        """Показывает файлы в корзине по заданной маске.
+        """Возвращает список файлов в корзине по заданной маске.
 
         Маска задается в формате Unix filename pattern.
 
@@ -136,15 +144,13 @@ class MyRm(object):
 
         """
         result = []
-        path_mask = self.trash.to_internal(path_mask)
-        directory, mask = os.path.split(path_mask)
-        file_mask = stamp.extend_mask_by_stamp(mask)
-        files = utils.search(directory, mask, file_mask,
-                             recursive=recursive, find_all=True)
-        files_versions = stamp.files_to_file_dict(files)
-        for path in files_versions:
+        files_versions = self.trash.search(path_mask, 
+                                           recursive=recursive, find_all=True)
+        files = files_versions.keys()
+        files.sort(key=lambda f: (f.count(os.sep), f))
+        for path in files:
             for dtime in files_versions[path]:
-                result.extend((path, dtime))
+                result.append((path, dtime))
                 if not versions:
                     break
         return result
@@ -152,6 +158,8 @@ class MyRm(object):
     @_lock_decodator
     def clean(self, path_mask=None, recursive=False, how_old=-1):
         """Удаляет файлы из корзины навсегда.
+        
+        Возвращает количестов очищенных файлов и их размер.
 
         Непозиционные аргументы:
         path_mask -- маска. Если None, удаляется вся корзина.
@@ -164,19 +172,20 @@ class MyRm(object):
         Используется _lock_decodator.
 
         """
+        size = 0
+        count = 0
+        
         if path_mask is None:
             path_mask = self.cfg["trash"]["dir"]
-        path_mask = self.trash.to_internal(path_mask)
-        directory, mask = os.path.split(path_mask)
-
-        file_mask = stamp.extend_mask_by_stamp(mask)
-        files = utils.search(directory, mask, file_mask, recursive=recursive)
-        files_versions = stamp.files_to_file_dict(files)
+        files_versions = self.trash.search(path_mask, 
+                                    recursive=recursive, find_all=True)
 
         for path in files_versions:
-            ext_path = self.trash.to_external(path)
-            if  self.acsess_manager.clean_acsess(ext_path):
-                self.trash.remove(path, how_old=how_old)
+            if  self.acsess_manager.clean_acsess(path):
+                delta_count_size = self.trash.remove(path, how_old=how_old)
+                count += delta_count_size[0]
+                size += delta_count_size[1]
+        return count, size
 
     @_lock_decodator
     def autoclean(self):

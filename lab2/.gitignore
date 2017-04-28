@@ -1,0 +1,7 @@
+*.pyc
+.directory
+temp
+build
+dist
+myrm.egg-info
+env
