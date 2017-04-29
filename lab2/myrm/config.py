@@ -17,24 +17,25 @@ def get_default_config():
     """
     result = {}
     result["force"] = False
-    result["dryrun"] = True
+    result["dryrun"] = False
     result["verbose"] = True
     result["interactive"] = False
+    result["replace"] = False
 
     result["trash"] = {}
-    result["trash"]["dir"] = "./trash"
+    result["trash"]["dir"] = "~/.trash"
     result["trash"]["lockfile"] = "lock"
     result["trash"]["allowautoclean"] = True
 
     result["trash"]["max"] = {}
-    result["trash"]["max"]["size"] = 1024
-    result["trash"]["max"]["count"] = 5
+    result["trash"]["max"]["size"] = 1024*1024*1024
+    result["trash"]["max"]["count"] = 10*1000*1000
 
     result["trash"]["autoclean"] = {}
-    result["trash"]["autoclean"]["size"] = 300
-    result["trash"]["autoclean"]["count"] = 10
-    result["trash"]["autoclean"]["days"] = 1
-    result["trash"]["autoclean"]["samename"] = 2
+    result["trash"]["autoclean"]["size"] = 512*1024*1024
+    result["trash"]["autoclean"]["count"] = 1000*1000
+    result["trash"]["autoclean"]["days"] = 90
+    result["trash"]["autoclean"]["samename"] = 10
 
     return result
 
@@ -113,6 +114,8 @@ def load_from_cfg(filename):
 
     Позицонные аргументы:
     filename -- имя входного файла
+    
+    Выбрасывает ValueError если файл имеет плохой формат.
 
     """
     result = get_default_config()

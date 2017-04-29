@@ -78,7 +78,8 @@ class AcsessManager(object):
         """
         if self.cfg["interactive"] and not ask('remove', path):
             return False
-        logging.info('Remove {path}', path=path)
+        log_msg = "Remove '{path}'".format(path=path)
+        logging.info(log_msg)
         if self.cfg["dryrun"]:
             return False
         return True
@@ -91,11 +92,32 @@ class AcsessManager(object):
         dryrun -- режим, иммитирующий работу корзины
 
         """
-        if self.cfg["interactive"] and not ask('restore', path):
+        if self.cfg["interactive"] and not ask("restore", path):
             return False
-        logging.info('Restore {path}', path=path)
+        log_msg = "Restore '{path}'".format(path=path)
+        logging.info(log_msg)
         if self.cfg["dryrun"]:
             return False
+        return True
+    
+    def replace_acsess(self, path):
+        """Возвращает есть ли доступ к востанавлению объекта.
+
+        Учитываемые параметры файла конфигурации:
+        interactive -- режим опроса пользователя
+        dryrun -- режим, иммитирующий работу корзины
+
+        """
+        if self.cfg["dryrun"]:
+            return False
+        if self.cfg["replace"]:
+            log_msg = "Replace '{path}'".format(path=path)
+            logging.info(log_msg)
+            return True
+        if ask("REPLACE", path):
+            log_msg = "Replace '{path}'".format(path=path)
+            logging.info(log_msg)
+            return True
         return True
 
     def clean_acsess(self, path):
@@ -106,9 +128,10 @@ class AcsessManager(object):
         dryrun -- режим, иммитирующий работу корзины
 
         """
-        if self.cfg["interactive"] and not ask('clean(forever)', path):
+        if self.cfg["interactive"] and not ask("clean(forever)", path):
             return False
-        logging.info("Clean '{path}'", path=path)
+        log_msg = "Clean '{path}'".format(path=path)
+        logging.info(log_msg)
         if self.cfg["dryrun"]:
             return False
         return True
@@ -121,11 +144,12 @@ class AcsessManager(object):
         dryrun -- режим, иммитирующий работу корзины
 
         """
-        operation = 'autoclean file(forever)'
+        operation = "autoclean file(forever)"
         trash_path = self.cfg["trash"]["dir"]
         if self.cfg["interactive"] and not ask(operation, trash_path):
             return False
-        logging.info("Autoclean '{trash_path}'", trash_path=trash_path)
+        log_msg = "Autoclean '{trash_path}'".format(trash_path=trash_path)
+        logging.info(log_msg)
         if self.cfg["dryrun"]:
             return False
         return True

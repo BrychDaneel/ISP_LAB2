@@ -146,5 +146,5 @@ def autoclean(trash):
 
     if not was_locked:
         trash.unlock()
-        
+    
     return delta_count, delta_size 

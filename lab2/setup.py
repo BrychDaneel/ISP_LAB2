@@ -9,6 +9,6 @@ setup(
     entry_points={
         'console_scripts':
             ['myrm = myrm:main',
-             'mrm = myrm:mrm']
+             'mrm = myrm:shor_rm']
         }
     )

@@ -32,7 +32,6 @@ import myrm.autoclean as autoclean
 from myrm.trash import Trash
 from myrm.acsess_manage import AcsessManager
 
-
 def _lock_decodator(func):
     """Блокирует корзину до метода. Разблокирует после.
 
@@ -76,6 +75,7 @@ class MyRm(object):
         Возвращает количестов удаленных файлов и их размер.
 
         Маска задается в формате Unix filename pattern.
+        Только последний элемент пути может быть маской.
 
         Позиионные аргументы:
         path_mask -- маска
@@ -87,13 +87,34 @@ class MyRm(object):
         Используется _lock_decodator.
 
         """
+        path_mask = os.path.expanduser(path_mask)
+        path_mask = os.path.abspath(path_mask)
         size = 0
         count = 0
         directory, mask = os.path.split(path_mask)
         found = utils.search(directory, mask, mask, recursive=recursive)
         for path in found:
             if  self.acsess_manager.remove_acsess(path):
-                delta_count, delta_size = self.trash.add(path)
+                try:
+                    try:
+                        delta_count, delta_size = self.trash.add(path)
+                    except trash.LimitExcessException:
+                        if self.cfg["trash"]["allowautoclean"]:
+                            log_msg = ("Bukkit limit excess. " 
+                                       "Try to autoclean.")
+                            logging.info(log_msg)
+                            
+                            dcount, dsize = autoclean.autoclean(self.trash)
+                            log_fmt = "{count} files({size} bytes) cleaned."
+                            log_msg = log_fmt.format(count=dcount, size=dsize)
+                            
+                            delta_count, delta_size = self.trash.add(path)
+                        else:
+                            raise
+                except Exception:
+                    if not self.cfg["force"]:
+                        raise
+                    
                 size += delta_size
                 count += delta_count
         return count, size
@@ -105,6 +126,7 @@ class MyRm(object):
         Возвращает количестов удаленных файлов и их размер.
 
         Маска задается в формате Unix filename pattern.
+        Только последний элемент пути может быть маской.
 
         Позиионные аргументы:
         path_mask -- маска
@@ -118,22 +140,31 @@ class MyRm(object):
         Используется _lock_decodator.
 
         """
+        path_mask = os.path.expanduser(path_mask)
+        path_mask = os.path.abspath(path_mask)
         size = 0
         count = 0
         files_versions = self.trash.search(path_mask, recursive=recursive)
         for path in files_versions:
-            ext_path = self.trash.to_internal(path)
-            if  self.acsess_manager.restore_acsess(ext_path):
-                delta_count_size = self.trash.restore(path, how_old=how_old)
-                count += delta_count_size[0]
-                size += delta_count_size[1]
+            if  self.acsess_manager.restore_acsess(path):
+                if (not os.path.exists(path) or 
+                        self.acsess_manager.replace_acsess(path)):
+                    try:
+                        delta_count_size = self.trash.restore(path, 
+                                                            how_old=how_old)
+                    except Exception:
+                        if not self.cfg["force"]:
+                            raise
+                    count += delta_count_size[0]
+                    size += delta_count_size[1]
         return count, size
 
     @_lock_decodator
-    def lst(self, path_mask='*', recursive=False, versions=True):
+    def lst(self, path_mask="*", recursive=False, versions=True):
         """Возвращает список файлов в корзине по заданной маске.
 
         Маска задается в формате Unix filename pattern.
+        Только последний элемент пути может быть маской.
 
         Непозиционные аргументы:
         path_mask -- маска (по умолчанию: '*')
@@ -143,6 +174,8 @@ class MyRm(object):
         Используется _lock_decodator.
 
         """
+        path_mask = os.path.expanduser(path_mask)
+        path_mask = os.path.abspath(path_mask)
         result = []
         files_versions = self.trash.search(path_mask, 
                                            recursive=recursive, find_all=True)
@@ -160,6 +193,7 @@ class MyRm(object):
         """Удаляет файлы из корзины навсегда.
         
         Возвращает количестов очищенных файлов и их размер.
+        Только последний элемент пути может быть маской.
 
         Непозиционные аргументы:
         path_mask -- маска. Если None, удаляется вся корзина.
@@ -172,6 +206,8 @@ class MyRm(object):
         Используется _lock_decodator.
 
         """
+        path_mask = os.path.expanduser(path_mask)
+        path_mask = os.path.abspath(path_mask)
         size = 0
         count = 0
         
@@ -182,14 +218,18 @@ class MyRm(object):
 
         for path in files_versions:
             if  self.acsess_manager.clean_acsess(path):
-                delta_count_size = self.trash.remove(path, how_old=how_old)
+                try:
+                    delta_count_size = self.trash.remove(path, how_old=how_old)
+                except Exception:
+                    if not self.cfg["force"]:
+                        raise    
                 count += delta_count_size[0]
                 size += delta_count_size[1]
         return count, size
 
     @_lock_decodator
     def autoclean(self):
-        """Выполняет очистку корзины по разнам политикам.
+        """Выполняет очистку. Возвращает кол-во очищ файлов и размер.
 
         Информаия о политиках берется из файла конфигурации.
 
@@ -211,27 +251,36 @@ def main(rm_only=False):
 
     Операциии и аргументы беруться из командной строки.
     """
-    parser = argparse.ArgumentParser(prog='myrm')
+    parser = argparse.ArgumentParser(prog="myrm")
 
     if not rm_only:
-        parser.add_argument('command',
-                            choices=['rm', 'rs', 'ls', 'clear', 'autoclear'])
-    parser.add_argument('filemask')
-    parser.add_argument('-r', '-R', '--recursive',
-                        dest='recursive', action='store_true')
-    parser.add_argument('-o', '--old', dest='old', default=0)
+        parser.add_argument("command",
+                            choices=["rm", "rs", "ls", "clear", "autoclear"])
+    parser.add_argument("filemasks", nargs='+')
+    parser.add_argument("-r", "-R", "--recursive",
+                        dest="recursive", action="store_true")
+    
+    parser.add_argument("-o", "--old", dest="old", default=0, 
+                        help="Choose version of file.")
+    parser.add_argument("-a", "--all", dest="versions",
+                        action="store_const", const=True, 
+                        help="display all versions of files.")
+    
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--jsonconfig", default=None)
 
-    parser.add_argument('--config', default=None)
-    parser.add_argument('--jsonconfig', default=None)
-
-    parser.add_argument('-v', '--verbose', dest='verbose',
-                        action='store_const', const=True)
-    parser.add_argument('-d', '--dryrun', dest='dryrun',
-                        action='store_const', const=True)
-    parser.add_argument('-f', '--force', dest='force',
-                        action='store_const', const=True)
-    parser.add_argument('-i', '--interactive', dest='interactive',
-                        action='store_const', const=True)
+    parser.add_argument("-v", "--verbose", dest="verbose",
+                        action="store_const", const=True, 
+                        help="show list of operate files.")
+    parser.add_argument("-d", "--dryrun", dest="dryrun",
+                        action="store_const", const=True, 
+                        help="just emulate work.")
+    parser.add_argument("-f", "--force", dest="force",
+                        action="store_const", const=True, 
+                        help="igrnore errors.")
+    parser.add_argument("-i", "--interactive", dest="interactive",
+                        action="store_const", const=True, 
+                        help="ask you before operation.")
 
     args = parser.parse_args()
     cfg = config.get_default_config()
@@ -243,31 +292,87 @@ def main(rm_only=False):
         cfg = config.load_from_json(args.config)
 
     if args.force is not None:
-        cfg['force'] = args.force
+        cfg["force"] = args.force
     if args.dryrun is not None:
-        cfg['dryrun'] = args.dryrun
+        cfg["dryrun"] = args.dryrun
     if args.verbose is not None:
-        cfg['verbose'] = args.verbose
+        cfg["verbose"] = args.verbose
     if args.interactive is not None:
-        cfg['interactive'] = args.interactive
+        cfg["interactive"] = args.interactive
+
+    if cfg["verbose"]:
+        logging.basicConfig(format="%(message)s", level=logging.INFO)
 
     mrm = MyRm(cfg)
+    
+    count = 0
+    size = 0
+    for fime_mask in args.filemasks:
+        if rm_only:
+            dcount, dsize = mrm.remove(fime_mask, recursive=args.recursive)
+            count += dcount
+            size += dsize
+        else:
+            cmd = args.command
+            if cmd == "rm":
+                dcount, dsize = mrm.remove(fime_mask , 
+                                        recursive=args.recursive)
+                count += dcount
+                size += dsize
+                
+            elif cmd == "rs":
+                dcount, dsize = mrm.restore(fime_mask, recursive=args.recursive, 
+                                          how_old=args.old)
+                count += dcount
+                size += dsize       
+                
+            elif cmd == "ls":
+                files = mrm.lst(fime_mask, recursive=args.recursive,
+                                versions=args.versions)
+                for path, version in files:
+                    if version == None or not args.versions:
+                        log_msg = path
+                    else:
+                        log_msg = "{} ({})".format(path, 
+                                                version.isoformat())
+                    logging.info(log_msg)                    
+                    
+            elif cmd == "clear":
+                dcount, dsize = mrm.clean(fime_mask, recursive=args.recursive, 
+                                        how_old=args.old)
+                count += dcount
+                size += dsize
+
+            elif cmd == "autoclear":
+                dcount, dsize = mrm.autoclean()
+                count += dcount
+                size += dsize
 
     if rm_only:
-        mrm.remove(args.filemask, recursive=args.recursive)
+        log_fmt = "{count} files ({size} bytes) was removed."
+        log_msg = log_fmt.format(count=count, size=size) 
+        logging.info(log_msg)
     else:
         cmd = args.command
-        if cmd == 'rm':
-            mrm.remove(args.filemask, recursive=args.recursive)
-        elif cmd == 'rs':
-            mrm.restore(args.filemask, recursive=args.recursive, how_old=args.old)
-        elif cmd == 'ls':
-            files = mrm.lst(args.filemask, recursive=args.recursive)
-            print files
-        elif cmd == 'clear':
-            mrm.clean(args.filemask, recursive=args.recursive, how_old=args.old)
-        elif cmd == 'autoclear':
-            mrm.autoclean()
+        if cmd == "rm":
+            log_fmt = "{count} files ({size} bytes) was removed."
+            log_msg = log_fmt.format(count=count, size=size) 
+            logging.info(log_msg)
+            
+        elif cmd == "rs":
+            log_fmt = "{count} files ({size} bytes) was restored."
+            log_msg = log_fmt.format(count=count, size=size) 
+            logging.info(log_msg)         
+                
+        elif cmd == "clear":
+            log_fmt = "{count} files ({size} bytes) was cleaned."
+            log_msg = log_fmt.format(count=count, size=size) 
+            logging.info(log_msg)
+
+        elif cmd == "autoclear":
+            log_fmt = "{count} files ({size} bytes) was cleaned."
+            log_msg = log_fmt.format(count=count, size=size) 
+            logging.info(log_msg)
 
 def shor_rm():
     """Красткая точка входа. Выполняет удаление в корзину.

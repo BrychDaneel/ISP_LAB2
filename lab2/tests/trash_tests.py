@@ -98,7 +98,7 @@ class TrashTests(unittest.TestCase):
     def test_ext_invalid(self):
         lock_file = self.trash.lock_file_path()
         self.trash.lock()
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             self.trash.to_external("/a/b.txt")
             
     def test_lock(self):
@@ -112,7 +112,7 @@ class TrashTests(unittest.TestCase):
     def test_double_lock(self):
         lock_file = self.trash.lock_file_path()
         self.trash.lock()
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(IOError):
             self.trash.lock()
 
     def test_simple(self):
@@ -150,7 +150,7 @@ class TrashTests(unittest.TestCase):
             self.trash.add(path)
             open(path, "w").close
             
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(myrm.trash.LimitExcessException):
             self.trash.add(path)
         
         self.trash.unlock()
@@ -171,7 +171,7 @@ class TrashTests(unittest.TestCase):
         f.write("123456")
         f.close()
         
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(myrm.trash.LimitExcessException):
             self.trash.add(path)
         
         self.trash.unlock()

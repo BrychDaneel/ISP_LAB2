@@ -6,6 +6,9 @@
 Вспомогательный декоратор:
     * need_lock_decodator -- возбуждает исключение если корзина
             не заблокированна.
+
+Исключения модуля:
+    LimitExcessException -- выбрасывается при превышении лимита
 """
 
 
@@ -26,8 +29,14 @@ def _need_lock_decodator(func):
         if self.locked:
             return func(self, *args, **kargs)
         else:
-            assert False
+            raise IOError("Trash is not locked.")
     return result_func
+
+
+class LimitExcessException(Exception):
+    """Возбуждается при превышения лимита.
+    """
+    pass
 
 
 class Trash(object):
@@ -82,6 +91,8 @@ class Trash(object):
         """Возвращает путь к файлу блокировки.
         """
         thash_dir = self.cfg["trash"]["dir"]
+        thash_dir = os.path.expanduser(thash_dir)
+        thash_dir = os.path.abspath(thash_dir)
         lock_file = self.cfg["trash"]["lockfile"]
         return os.path.join(thash_dir, lock_file)
 
@@ -97,12 +108,14 @@ class Trash(object):
 
         """
         thash_dir = self.cfg["trash"]["dir"]
+        thash_dir = os.path.expanduser(thash_dir)
+        thash_dir = os.path.abspath(thash_dir)
         if not os.path.exists(thash_dir):
             os.makedirs(thash_dir)
 
         lock_file = self.lock_file_path()
         if os.path.exists(lock_file):
-            raise AssertionError("Lock file already exists.")
+            raise IOError("Lock file already exists.")
         open(lock_file, "w").close()
         self.thash_dir = thash_dir
 
@@ -144,6 +157,8 @@ class Trash(object):
 
         """
         thash_dir = self.cfg["trash"]["dir"]
+        thash_dir = os.path.expanduser(thash_dir)
+        thash_dir = os.path.abspath(thash_dir)
 
         path = os.path.abspath(path)
         splitted_path = utils.split_path(path)
@@ -166,8 +181,11 @@ class Trash(object):
 
         """
         thash_dir = self.cfg["trash"]["dir"]
+        thash_dir = os.path.expanduser(thash_dir)
+        thash_dir = os.path.abspath(thash_dir)
         path = os.path.abspath(path)
-        assert(os.path.commonprefix((path, thash_dir)) == thash_dir)
+        if os.path.commonprefix((path, thash_dir)) != thash_dir:
+            raise ValueError("{} is'n trash area({}).".format(path, thash_dir))
         path = os.path.relpath(path, thash_dir)
         splitted_path = utils.split_path(path)[1:]
         protocol_code = splitted_path[0]
@@ -220,8 +238,10 @@ class Trash(object):
         new_name = self.to_internal(old_name)
         now = datetime.datetime.utcnow()
         new_name = stamp.add_stamp(new_name, now)
-        logging.debug("Moving file {old_name} to {new_name}",
+        debug_msg = "Moving file {old_name} to {new_name}".format(
                       old_name=old_name, new_name=new_name)
+        logging.debug(debug_msg)
+        
         if not os.path.exists(os.path.dirname(new_name)):
             os.makedirs(os.path.dirname(new_name))
         os.rename(old_name, new_name)
@@ -240,11 +260,15 @@ class Trash(object):
         перемещаются файлы.
 
         """
+        if os.path.ismount(dir_name):
+            raise IOError("Can't remove mount point.")
+
         old_name = os.path.abspath(dir_name)
         new_name = self.to_internal(old_name)
-
+        
         if not os.path.exists(new_name):
-            logging.debug("Make dir {directory} ", directory=new_name)
+            debug_msg = "Make dir {directory} ".format(directory=new_name)
+            logging.debug(debug_msg)
             os.makedirs(new_name)
 
         for element in os.listdir(dir_name):
@@ -277,13 +301,21 @@ class Trash(object):
         old_name = self.to_internal(new_name)
         old_name = stamp.get_version(old_name, how_old)
 
-        if not os.path.exists(os.path.dirname(new_name)):
-            logging.debug("Make dir {directory} ", directory=new_name)
-            os.makedirs(os.path.dirname(new_name))
+        if os.path.exists(new_name):
+            os.remove(new_name)
 
-        logging.debug("Moving file {old_name} to {new_name}",
+        if not os.path.exists(os.path.dirname(new_name)):
+            debug_msg = "Make dir {directory} ".format(directory=new_name)
+            logging.debug(debug_msg)
+            os.makedirs(os.path.dirname(new_name))
+        
+        debug_msg = "Moving file {old_name} to {new_name}".format(
                       old_name=old_name, new_name=new_name)
+        logging.debug(debug_msg)
         os.rename(old_name, new_name)
+        
+        if utils.files_count(os.path.dirname(old_name)) == 0:
+            os.path.removedirs(os.path.dirname(old_name))
 
     def rs_dir(self, dir_name, how_old=0):
         """Премешает папку из корзины обратно.
@@ -302,12 +334,13 @@ class Trash(object):
         Для этого в создаются все недостающие папки и
         востанавливаются файлы.
 
-        """
+        """        
         new_name = os.path.abspath(dir_name)
         old_name = self.to_internal(new_name)
 
         if not os.path.exists(new_name):
-            logging.debug("Make dir {directory} ", directory=new_name)
+            debug_msg = "Make dir {directory} ".format(directory=new_name)
+            logging.debug(debug_msg)
             os.makedirs(new_name)
 
         for element in os.listdir(old_name):
@@ -341,8 +374,14 @@ class Trash(object):
         new_size = self.trash_size + delta_size
         new_count = self.files_count + delta_count
         
-        assert new_size <= self.cfg["trash"]["max"]["size"]
-        assert new_count <= self.cfg["trash"]["max"]["count"]
+        thash_dir = self.cfg["trash"]["dir"]
+        if os.path.commonprefix((path, thash_dir)) == thash_dir:
+            raise ValueError("You can't remove anythin from trash.")
+        
+        if new_size > self.cfg["trash"]["max"]["size"]:
+            raise LimitExcessException("Size limit excess.")
+        if new_count > self.cfg["trash"]["max"]["count"]:
+            raise LimitExcessException("Files count limit excess.")
 
         if os.path.isdir(path):
             self.add_dir(path)
@@ -371,7 +410,6 @@ class Trash(object):
         количество файлов в ней.
 
         """
-        
         new_path = os.path.abspath(path)
         old_path = self.to_internal(new_path)
         
@@ -457,7 +495,7 @@ class Trash(object):
         directory, mask = os.path.split(path_mask)
 
         if not os.path.exists(directory):
-            return []
+            return {}
         file_mask = stamp.extend_mask_by_stamp(mask)
         files = utils.search(directory, mask, file_mask, 
                              recursive=recursive, find_all=find_all)
