@@ -176,6 +176,30 @@ class Trash(object):
         path = os.path.join(*splitted_path)
 
         return path
+    
+    def get_file_time_list(self):
+        """Возвращает список ВСЕХ файлов в корзине.
+        
+        Список сотоит из кортежей (путь, время удаления).
+        
+        Список сортируется по дате удаления.
+        
+        """
+        trash_root_list = os.listdir(self.thash_dir)
+        trash_root_list = [os.path.join(self.thash_dir, path) 
+                           for path in trash_root_list]
+        trash_protocols = (d for d in trash_root_list if os.path.isdir(d))
+        files = []
+        for directory in trash_protocols:
+            for dirpath, dirnames, filenames in os.walk(directory):
+                files.extend([os.path.join(dirpath, f) for f in filenames])
+
+        files = [self.to_external(f) for f in files]
+        file_time_list = [stamp.split_stamp(f) for f in files]
+        
+        file_time_list.sort(key=lambda (file_name, vers): vers)
+        
+        return file_time_list
 
     def add_file(self, file_name):
         """Перемещает файл в корзину.
@@ -403,8 +427,8 @@ class Trash(object):
                     os.remove(full_path)
         else:
             delta_size = delta_size + utils.files_size(path)
-            delta_count = delta_count + utils.files_count(path)   
-            
+            delta_count = delta_count + utils.files_count(path)
+
             for dirpath, dirnames, filenames in os.walk(path, topdown=False):
                 for element in filenames:
                     os.remove(os.path.join(dirpath, element))
@@ -440,5 +464,5 @@ class Trash(object):
         files = [self.to_external(f) for f in files]
         files_versions = stamp.files_to_file_dict(files)
         
-        return files_versions 
+        return files_versions
 

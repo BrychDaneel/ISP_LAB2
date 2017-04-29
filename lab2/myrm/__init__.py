@@ -167,7 +167,7 @@ class MyRm(object):
         recursive -- производить ли поиск в подпапках.
         how_old -- версия файла в порядке устарения даты удаления.
                    Если больше числа файлов, берется последняя версия.
-                   По умолчанию: 0 (последняя версия)
+                   По умолчанию: -1 (все версии)
 
         Используется _lock_decodator.
 
@@ -195,7 +195,8 @@ class MyRm(object):
 
         """
         if  self.acsess_manager.autoclean_acsess():
-            autoclean.autoclean(self.trash)
+            return autoclean.autoclean(self.trash)
+        return 0, 0
 
 
 def get_default_myrm():
