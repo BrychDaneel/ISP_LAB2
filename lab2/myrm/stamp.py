@@ -64,22 +64,22 @@ def split_stamp(path):
     "{path}_rmdt={posix_sec}_rmmsec={microsec}_"
 
     """
-    prefix, sep3, end = path.rpartition("_")
-    prefix, sep2, rm_msec = prefix.rpartition("_rmmsec=")
-    filename, sep1, rm_dt = prefix.rpartition("_rmdt=")
-
-    format_match = len(end) == 0
-    format_match = format_match and sep3 == "_"
-    format_match = format_match and sep2 == "_rmmsec="
-    format_match = sep1 == "_rmdt="
-
-    if not format_match:
+    first_prefix, sep, sufix = path.rpartition("_")
+    if sep != "_" or len(sufix) > 0:
         return path, None
-
+    
+    second_prefix, sep, rm_msec = first_prefix.rpartition("_rmmsec=")
+    if sep != "_rmmsec=":
+        return path, None     
+    
+    filename, sep, rm_dt = second_prefix.rpartition("_rmdt=")
+    if sep != "_rmdt=":
+        return path, None
+    
     try:
         sec = int(rm_dt)
         msec = int(rm_msec)
-        dtime = datetime.datetime.utcfromtimestamp(sec)
+        dtime = datetime.datetime.fromtimestamp(sec)
         dtime += datetime.timedelta(microseconds=msec)
         return filename, dtime
     except ValueError:

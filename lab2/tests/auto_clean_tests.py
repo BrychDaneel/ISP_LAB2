@@ -22,15 +22,15 @@ class TrashTests(unittest.TestCase):
         self.files_folder = os.path.join(self.folder, "files")
         
         os.makedirs(self.files_folder)
-        open(os.path.join(self.files_folder, "a.txt"), "w").close
-        open(os.path.join(self.files_folder, "b.txt"), "w").close
-        open(os.path.join(self.files_folder, "c.png"), "w").close
+        open(os.path.join(self.files_folder, "a.txt"), "w").close()
+        open(os.path.join(self.files_folder, "b.txt"), "w").close()
+        open(os.path.join(self.files_folder, "c.png"), "w").close()
         os.makedirs(os.path.join(self.files_folder, "e"))
-        open(os.path.join(self.files_folder, "e", "f.txt"), "w").close
-        open(os.path.join(self.files_folder, "e", "g.txt"), "w").close
-        open(os.path.join(self.files_folder, "e", "h.png"), "w").close
+        open(os.path.join(self.files_folder, "e", "f.txt"), "w").close()
+        open(os.path.join(self.files_folder, "e", "g.txt"), "w").close()
+        open(os.path.join(self.files_folder, "e", "h.png"), "w").close()
         os.makedirs(os.path.join(self.files_folder, "e","k"))
-        open(os.path.join(self.files_folder, "e", "k","l.txt"), "w").close
+        open(os.path.join(self.files_folder, "e", "k","l.txt"), "w").close()
         
         path = os.path.join(self.files_folder, "a.txt")
         f = open(path, "w")

@@ -3,6 +3,9 @@
 
 """Содержит класс Tash, управляющий содержимым корзины.
 
+Вспомогательный класс:
+    * TrashLocker - для блокировки корзины через менеджер контента.
+
 Вспомогательный декоратор:
     * need_lock_decodator -- возбуждает исключение если корзина
             не заблокированна.
@@ -19,24 +22,35 @@ import myrm.utils as utils
 import myrm.stamp as stamp
 
 
-def _need_lock_decodator(func):
-    """Возбуждает исключение если корзина не заблокированна.
-
-    Работает только на методах Trash.
-
-    """
-    def result_func(self, *args, **kargs):
-        if self.locked:
-            return func(self, *args, **kargs)
-        else:
-            raise IOError("Trash is not locked.")
-    return result_func
-
-
 class LimitExcessException(Exception):
-    """Возбуждается при превышения лимита.
+    """Возбуждается при превышения пользовательского лимита.
     """
     pass
+
+
+class TrashLocker(object):
+    """Используется для блокировки корзины через менеджер контента.
+
+    Конструктор принимает в себя класс корзины.
+    """
+
+    def __init__(self, trash):
+        """Создает объект для указанной корзины.
+        """
+        self.trash = trash
+        self._was_locked = trash.is_locked()
+
+    def __enter__(self):
+        """Блокирует корзину.
+        """
+        if not self._was_locked:
+            self.trash.set_lock()
+
+    def __exit__(self, exp_type, exp_value, traceback):
+        """Разблокирует корзину.
+        """
+        if not self._was_locked:
+            self.trash.unset_lock()
 
 
 class Trash(object):
@@ -49,7 +63,7 @@ class Trash(object):
     * locked -- заблокированна ли корзина в текущий момент
 
     Следующие поля используются только на протяжении блокировки:
-    * thash_dir -- путь к папке с корзиной
+    * trash_dir -- путь к папке с корзиной
     * lock_file -- имя файла блокировки
     * trash_ size -- текущий размер корзины
     * files_count -- текущее число файлов в корзине
@@ -70,33 +84,72 @@ class Trash(object):
     Следующие методы не рекомендуется использовать вне класса:
     * add_file -- добавляет файл в корзину
     * add_dir -- добавляет папку в корзину
-    * rs_file -- востанавливает файл из корзины
-    * rs_dir -- востанавливает папку из корзины
+    * restore_file -- востанавливает файл из корзины
+    * restore_dir -- востанавливает папку из корзины
     """
 
-    def __init__(self, cfg):
+    def __init__(self, **kargs):
         """Создает объект корзины по указанному объекту конфигурации.
+
+        Непозиционные аргументы:
+        * directory -- папка корзины
+        * lock_file -- путь к файлу блокировки относительно корзины
+        * max_size -- максимальный суммарный размер корзины
+        * max_count -- максимальное количество файлов корзины
+
         """
-        self.cfg = cfg
+        self.configurate(**kargs)
+        self._locked = False
 
         # Значения известны только во время блокировки
-        self.thash_dir = None
-        self.lock_file = None
-        self.trash_size = None
-        self.files_count = None
+        self._size = None
+        self._count = None
+        
+    def configurate(self, directory="~/.trash", lock_file="lock",
+                 max_size=1024*1024*1024, max_count=10*1000*1000):
+        """
+        """
+        self.directory = directory
+        self.lock_file = lock_file
 
-        self.locked = False
+        self.max_size = max_size
+        self.max_count = max_count
+        
+    def get_size(self):
+        """
+        """
+        if self._locked:
+            return self._size
+        else:
+            lock_file = self.get_lock_file_path()
+            size = utils.files_size(trash_dir)
+            
+            # Файл блокировки также содержиться в корзине
+            size -= utils.files_size(lock_file)
+            
+            return size
+    
+    def get_count(self):
+        """
+        """
+        if self._locked:
+            return self._count
+        else:
+            lock_file = self.get_lock_file_path()
+            count = utils.files_count(trash_dir)
+            
+            # Файл блокировки также содержиться в корзине
+            count -= utils.files_count(lock_file)
+            
+            return count
 
-    def lock_file_path(self):
+    def get_lock_file_path(self):
         """Возвращает путь к файлу блокировки.
         """
-        thash_dir = self.cfg["trash"]["dir"]
-        thash_dir = os.path.expanduser(thash_dir)
-        thash_dir = os.path.abspath(thash_dir)
-        lock_file = self.cfg["trash"]["lockfile"]
-        return os.path.join(thash_dir, lock_file)
+        trash_dir = utils.absolute_path(self.directory)
+        return os.path.join(trash_dir, self.lock_file)
 
-    def lock(self):
+    def set_lock(self):
         """Производит блокировку корзины.
 
         Сохраняет текущее значения пути к корзине и
@@ -107,27 +160,24 @@ class Trash(object):
         Рассчитывает текущий размер корзины и количество файлов.
 
         """
-        thash_dir = self.cfg["trash"]["dir"]
-        thash_dir = os.path.expanduser(thash_dir)
-        thash_dir = os.path.abspath(thash_dir)
-        if not os.path.exists(thash_dir):
-            os.makedirs(thash_dir)
+        trash_dir = utils.absolute_path(self.directory)
+        if not os.path.exists(trash_dir):
+            os.makedirs(trash_dir)
 
-        lock_file = self.lock_file_path()
+        lock_file = self.get_lock_file_path()
+
         if os.path.exists(lock_file):
             raise IOError("Lock file already exists.")
-        open(lock_file, "w").close()
-        self.thash_dir = thash_dir
 
-        # Файл блокировки также содержиться в корзине
-        self.files_count = utils.files_count(thash_dir) - 1
+        with open(lock_file, "w"):
+            pass
 
-        self.trash_size = utils.files_size(thash_dir)
-        self.trash_size -= utils.files_size(lock_file)
-        self.lock_file = lock_file
-        self.locked = True
+        self._count = self.get_count()
+        self._size = self.get_size()
 
-    def unlock(self):
+        self._locked = True
+
+    def unset_lock(self):
         """Производит разблокировку корзины.
 
         Очищает все сохранённые ранее значения.
@@ -137,12 +187,20 @@ class Trash(object):
         os.remove(self.lock_file)
 
         # Значения известны только во время блокировки
-        self.thash_dir = None
-        self.lock_file = None
-        self.trash_size = None
-        self.files_count = None
+        self._size = None
+        self._count = None
 
-        self.locked = False
+        self._locked = False
+
+    def is_locked(self):
+        """Возвращает, заблокированна ли корзина.
+        """
+        return self._locked
+
+    def lock(self):
+        """Блокировка через менеджер контента
+        """
+        return TrashLocker(self)
 
     def to_internal(self, path):
         """Возвращает путь файла, переподвешанного к корзине.
@@ -156,19 +214,17 @@ class Trash(object):
         Протокол шифруется как последовательность кодов символов.
 
         """
-        thash_dir = self.cfg["trash"]["dir"]
-        thash_dir = os.path.expanduser(thash_dir)
-        thash_dir = os.path.abspath(thash_dir)
+        trash_dir = utils.absolute_path(self.directory)
+        path_full = utils.absolute_path(path)
 
-        path = os.path.abspath(path)
-        splitted_path = utils.split_path(path)
+        splitted_path = utils.split_path(path_full)
 
         protocol = splitted_path[0]
         protocol_code = ' '.join([str(ord(char)) for char in protocol])
         splitted_path[0] = protocol_code
 
-        new_path = os.path.join(thash_dir, *splitted_path)
-        return new_path
+        int_path = os.path.join(trash_dir, *splitted_path)
+        return int_path
 
     def to_external(self, path):
         """Возвращает первоначальный путь файла.
@@ -180,43 +236,48 @@ class Trash(object):
         Протокол дешефруется из последовательности кодов символов.
 
         """
-        thash_dir = self.cfg["trash"]["dir"]
-        thash_dir = os.path.expanduser(thash_dir)
-        thash_dir = os.path.abspath(thash_dir)
-        path = os.path.abspath(path)
-        if os.path.commonprefix((path, thash_dir)) != thash_dir:
-            raise ValueError("{} is'n trash area({}).".format(path, thash_dir))
-        path = os.path.relpath(path, thash_dir)
-        splitted_path = utils.split_path(path)[1:]
+        trash_dir = utils.absolute_path(self.directory)
+        full_path = utils.absolute_path(path)
+
+        if os.path.commonprefix((full_path, trash_dir)) != trash_dir:
+            error_fmt = "{path} is'n trash area({trash_dir})."
+            error_msg = error_fmt.format(path=path, trash_dir=trash_dir)
+            raise ValueError(error_msg)
+
+        rel_path = os.path.relpath(full_path, trash_dir)
+        splitted_path = utils.split_path(rel_path)[1:]
+
         protocol_code = splitted_path[0]
         protocol = ''.join(chr(int(s)) for s in protocol_code.split(' '))
         splitted_path[0] = protocol
-        path = os.path.join(*splitted_path)
+        ext_path = os.path.join(*splitted_path)
 
-        return path
-    
+        return ext_path
+
     def get_file_time_list(self):
-        """Возвращает список ВСЕХ файлов в корзине.
-        
+        """Возвращает список всех файлов в корзине.
+
         Список сотоит из кортежей (путь, время удаления).
-        
+
         Список сортируется по дате удаления.
-        
+
         """
-        trash_root_list = os.listdir(self.thash_dir)
-        trash_root_list = [os.path.join(self.thash_dir, path) 
-                           for path in trash_root_list]
-        trash_protocols = (d for d in trash_root_list if os.path.isdir(d))
+        trash_dir = utils.absolute_path(self.directory)
+
+        root_list = os.listdir(trash_dir)
+        root_list_full = [os.path.join(trash_dir, path)
+                          for path in root_list]
+        trash_protocols = (d for d in root_list_full if os.path.isdir(d))
         files = []
-        for directory in trash_protocols:
-            for dirpath, dirnames, filenames in os.walk(directory):
+        for protocol_path in trash_protocols:
+            for dirpath, dirnames, filenames in os.walk(protocol_path):
                 files.extend([os.path.join(dirpath, f) for f in filenames])
 
-        files = [self.to_external(f) for f in files]
-        file_time_list = [stamp.split_stamp(f) for f in files]
-        
+        files_ext = [self.to_external(f) for f in files]
+        file_time_list = [stamp.split_stamp(f) for f in files_ext]
+
         file_time_list.sort(key=lambda (file_name, vers): vers)
-        
+
         return file_time_list
 
     def add_file(self, file_name):
@@ -234,17 +295,17 @@ class Trash(object):
         К файлу добавляется штамп текущего времени UTC.
 
         """
-        old_name = os.path.abspath(file_name)
-        new_name = self.to_internal(old_name)
-        now = datetime.datetime.utcnow()
-        new_name = stamp.add_stamp(new_name, now)
-        debug_msg = "Moving file {old_name} to {new_name}".format(
-                      old_name=old_name, new_name=new_name)
+        old_path = utils.absolute_path(file_name)
+        new_path = self.to_internal(old_path)
+        now = datetime.datetime.now()
+        full_new_path = stamp.add_stamp(new_path, now)
+        debug_fmt = "Moving file {old_path} to {new_path}"
+        debug_msg = debug_fmt.format(old_path=old_path, new_path=full_new_path)
         logging.debug(debug_msg)
-        
-        if not os.path.exists(os.path.dirname(new_name)):
-            os.makedirs(os.path.dirname(new_name))
-        os.rename(old_name, new_name)
+
+        if not os.path.exists(os.path.dirname(full_new_path)):
+            os.makedirs(os.path.dirname(full_new_path))
+        os.rename(old_path, full_new_path)
 
     def add_dir(self, dir_name):
         """Премещает папку в корзину.
@@ -260,33 +321,35 @@ class Trash(object):
         перемещаются файлы.
 
         """
-        if os.path.ismount(dir_name):
+        old_path = utils.absolute_path(dir_name)
+
+        if os.path.ismount(old_path):
             raise IOError("Can't remove mount point.")
 
-        old_name = os.path.abspath(dir_name)
-        new_name = self.to_internal(old_name)
-        
-        if not os.path.exists(new_name):
-            debug_msg = "Make dir {directory} ".format(directory=new_name)
+        new_path = self.to_internal(old_path)
+
+        if not os.path.exists(new_path):
+            debug_msg = "Make dir {directory} ".format(directory=new_path)
             logging.debug(debug_msg)
-            os.makedirs(new_name)
+            os.makedirs(new_path)
 
-        for element in os.listdir(dir_name):
-            path = os.path.join(dir_name, element)
-            isdir = os.path.isdir(path)
+        for element in os.listdir(old_path):
+            element_path = os.path.join(old_path, element)
+            isdir = os.path.isdir(element_path)
             if  isdir:
-                self.add_dir(path)
+                self.add_dir(element_path)
             else:
-                self.add_file(path)
-        os.rmdir(old_name)
+                self.add_file(element_path)
 
-    def rs_file(self, file_name, how_old=0):
+        os.rmdir(old_path)
+
+    def restore_file(self, file_name, how_old=0):
         """Перемещает файл из корзины в первоначалое местоположение.
 
         Позиционные аргументы:
         file_name -- путь к файлу в корзине
 
-        Непозиционные аргументы:
+        Непозиционные аргументы:files
         how_old -- версия файла в порядке устарения даты удаления.
                    По умолчанию: 0 (последняя версия)
 
@@ -297,27 +360,27 @@ class Trash(object):
         Файл переповешивается из папке корзины в корень.
 
         """
-        new_name = os.path.abspath(file_name)
-        old_name = self.to_internal(new_name)
-        old_name = stamp.get_version(old_name, how_old)
+        new_path = utils.absolute_path(file_name)
+        old_path = self.to_internal(new_path)
+        old_path_full = stamp.get_version(old_path, how_old)
 
-        if os.path.exists(new_name):
-            os.remove(new_name)
+        if os.path.exists(new_path):
+            os.remove(new_path)
 
-        if not os.path.exists(os.path.dirname(new_name)):
-            debug_msg = "Make dir {directory} ".format(directory=new_name)
+        if not os.path.exists(os.path.dirname(new_path)):
+            debug_msg = "Make dir {directory} ".format(directory=new_path)
             logging.debug(debug_msg)
-            os.makedirs(os.path.dirname(new_name))
-        
-        debug_msg = "Moving file {old_name} to {new_name}".format(
-                      old_name=old_name, new_name=new_name)
-        logging.debug(debug_msg)
-        os.rename(old_name, new_name)
-        
-        if utils.files_count(os.path.dirname(old_name)) == 0:
-            os.path.removedirs(os.path.dirname(old_name))
+            os.makedirs(os.path.dirname(new_path))
 
-    def rs_dir(self, dir_name, how_old=0):
+        debug_fmt = "Moving file {old_path} to {new_path}"
+        debug_msg = debug_fmt.format(old_path=old_path, new_path=new_path)
+        logging.debug(debug_msg)
+        os.rename(old_path_full, new_path)
+
+        if os.listdir(os.path.dirname(old_path)) == 0:
+            os.rmdir(os.path.dirname(old_path))
+
+    def restore_dir(self, dir_name, how_old=0):
         """Премешает папку из корзины обратно.
 
         Не следует использовать эту функцию вне класса
@@ -334,28 +397,31 @@ class Trash(object):
         Для этого в создаются все недостающие папки и
         востанавливаются файлы.
 
-        """        
-        new_name = os.path.abspath(dir_name)
-        old_name = self.to_internal(new_name)
+        """
+        new_path = utils.absolute_path(dir_name)
+        old_path = self.to_internal(new_path)
 
-        if not os.path.exists(new_name):
-            debug_msg = "Make dir {directory} ".format(directory=new_name)
+        if not os.path.exists(new_path):
+            debug_msg = "Make dir {directory} ".format(directory=new_path)
             logging.debug(debug_msg)
-            os.makedirs(new_name)
+            os.makedirs(new_path)
 
-        for element in os.listdir(old_name):
-            element = stamp.split_stamp(element)[0]
-            real_path = os.path.join(old_name, element)
-            path = os.path.join(new_name, element)
-            isdir = os.path.isdir(real_path)
-            if  isdir:
-                self.rs_dir(path, how_old=how_old)
+        mask = os.path.join(old_path, "*")
+        elements = self.search(mask)
+        for path in elements:
+            is_dir = os.path.exists(self.to_internal(path))
+            if is_dir:
+                self.restore_dir(path, how_old=how_old)
             else:
-                self.rs_file(path, how_old=how_old)
+                self.restore_file(path, how_old=how_old)
 
-    @_need_lock_decodator
+        if len(os.listdir(old_path)) == 0:
+            os.rmdir(old_path)
+
     def add(self, path):
         """Добавляет элемент в корзину.
+
+        Возвращает количестов удаленных файлов и их размер.
 
         Работа возможна только во время блокировки корзины.
 
@@ -371,16 +437,16 @@ class Trash(object):
         """
         delta_size = utils.files_size(path)
         delta_count = utils.files_count(path)
-        new_size = self.trash_size + delta_size
-        new_count = self.files_count + delta_count
-        
-        thash_dir = self.cfg["trash"]["dir"]
-        if os.path.commonprefix((path, thash_dir)) == thash_dir:
+        new_size = self.get_size() + delta_size
+        new_count = self.get_size() + delta_count
+
+        trash_dir = utils.absolute_path(self.directory)
+        if os.path.commonprefix((path, trash_dir)) == trash_dir:
             raise ValueError("You can't remove anythin from trash.")
-        
-        if new_size > self.cfg["trash"]["max"]["size"]:
+
+        if new_size > self.max_size:
             raise LimitExcessException("Size limit excess.")
-        if new_count > self.cfg["trash"]["max"]["count"]:
+        if new_count > self.max_count:
             raise LimitExcessException("Files count limit excess.")
 
         if os.path.isdir(path):
@@ -388,14 +454,16 @@ class Trash(object):
         else:
             self.add_file(path)
 
-        self.trash_size = new_size 
-        self.files_count = new_count
-        
+        if self.locked:
+            self._size = new_size
+            self._count = new_count
+
         return delta_count, delta_size
 
-    @_need_lock_decodator
     def restore(self, path, how_old=0):
         """Востанавливает элемент из корзины.
+
+        Возвращает количестов востановленных файлов и их размер.
 
         Работа возможна только во время блокировки корзины.
 
@@ -410,28 +478,29 @@ class Trash(object):
         количество файлов в ней.
 
         """
-        new_path = os.path.abspath(path)
+        new_path = utils.absolute_path(path)
         old_path = self.to_internal(new_path)
-        
-        full_path = old_path
-        if not os.path.isdir(full_path):
-            full_path = stamp.get_version(full_path, how_old)
-        delta_size = utils.files_size(full_path)
-        delta_count = utils.files_count(full_path)
-        
-        if os.path.isdir(old_path):
-            self.rs_dir(path, how_old=how_old)
-        else:
-            self.rs_file(path, how_old=how_old)
 
-        self.trash_size = self.trash_size - delta_size
-        self.files_count = self.files_count - delta_count
+        if not os.path.isdir(old_path):
+            old_path = stamp.get_version(old_path, how_old)
+        delta_size = utils.files_size(old_path)
+        delta_count = utils.files_count(old_path)
+
+        if os.path.isdir(old_path):
+            self.restore_dir(path, how_old=how_old)
+        else:
+            self.restore_file(path, how_old=how_old)
+
+        if self.locked:
+            self._size -= delta_size
+            self._count -= delta_count
 
         return delta_count, delta_size
 
-    @_need_lock_decodator
     def remove(self, path, how_old=-1):
         """Удаляет элемент из корзины навсегда.
+
+        Возвращает количестов очищенных файлов и их размер.
 
         Работа возможна только во время блокировки корзины.
 
@@ -447,7 +516,7 @@ class Trash(object):
 
         """
         path = self.to_internal(path)
-        
+
         delta_size = 0
         delta_count = 0
 
@@ -472,19 +541,21 @@ class Trash(object):
                     os.remove(os.path.join(dirpath, element))
                 os.rmdir(dirpath)
 
-        self.trash_size = self.trash_size - delta_size
-        self.files_count = self.files_count - delta_count
+        if self.locked:
+            self._size = self._size - delta_size
+            self._count = self._count - delta_count
+
         return delta_count, delta_size
-    
+
     def search(self, path_mask, recursive=False, find_all=False):
         """Поиск в корзине по маске. Возвращает словарь с версиями.
-        
+
         Маска задается в формате Unix filename pattern.
-        Путь задается относительно 
+        Путь задается относительно
 
         Позиионные аргументы:
         path_mask -- маска
-        
+
         Непозиционные аргументы:
         recursive -- производить лиpath поиск в подпапках.
         find_all -- углублять в подпапки,
@@ -497,10 +568,10 @@ class Trash(object):
         if not os.path.exists(directory):
             return {}
         file_mask = stamp.extend_mask_by_stamp(mask)
-        files = utils.search(directory, mask, file_mask, 
+        files = utils.search(directory, mask, file_mask,
                              recursive=recursive, find_all=find_all)
         files = [self.to_external(f) for f in files]
         files_versions = stamp.files_to_file_dict(files)
-        
+
         return files_versions
 

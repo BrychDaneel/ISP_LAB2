@@ -33,7 +33,7 @@ def search(directory, dir_mask, file_mask, recursive=False, find_all=False):
                     если они соответствуют маске (по-умолчанию False)
 
     """
-    if len(directory)==0:
+    if len(directory) == 0:
         directory = '.'
 
     file_re = re.compile(fnmatch.translate(file_mask))
@@ -76,7 +76,7 @@ def files_count(path):
 
     """
     if not os.path.isdir(path):
-        return 1
+        return 1 if os.path.exists(path) else 0
     ans = 0
     for dirpath, dirnames, filenames in os.walk(path):
         ans += len(filenames)
@@ -87,11 +87,20 @@ def files_size(path):
     """Возвращает занимаемое на диске место данного объекта.
     """
     if not os.path.isdir(path):
-        return os.lstat(path).st_size
+        if os.path.exists(path):
+            return os.lstat(path).st_size
+        else
+            return 0
     ans = 0
     for dirpath, dirnames, filenames in os.walk(path):
         for somefile in filenames:
             file_path = os.path.join(dirpath, somefile)
             ans += os.lstat(file_path).st_size
     return ans
+
+
+def absolute_path(path):
+    path_expand = os.path.expanduser(path)
+    path_abs = os.path.abspath(path_expand)
+    return path_abs 
 

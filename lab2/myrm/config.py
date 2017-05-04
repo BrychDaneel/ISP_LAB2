@@ -15,27 +15,29 @@ import json
 def get_default_config():
     """Возвращает программно заданный словарь конфигураций.
     """
-    result = {}
-    result["force"] = False
-    result["dryrun"] = False
-    result["verbose"] = True
-    result["interactive"] = False
-    result["replace"] = False
+    result = {
+        "force" : False
+        "dryrun" : False
+        "verbose" : True
+        "interactive" : False
+        "replace" : False
+        "allowautoclean" : True
+        
+        "trash" : {
+            "dir" : "~/.trash"
+            "lockfile" : "lock"
 
-    result["trash"] = {}
-    result["trash"]["dir"] = "~/.trash"
-    result["trash"]["lockfile"] = "lock"
-    result["trash"]["allowautoclean"] = True
-
-    result["trash"]["max"] = {}
-    result["trash"]["max"]["size"] = 1024*1024*1024
-    result["trash"]["max"]["count"] = 10*1000*1000
-
-    result["trash"]["autoclean"] = {}
-    result["trash"]["autoclean"]["size"] = 512*1024*1024
-    result["trash"]["autoclean"]["count"] = 1000*1000
-    result["trash"]["autoclean"]["days"] = 90
-    result["trash"]["autoclean"]["samename"] = 10
+            "max_size" : 1024*1024*1024
+            "max_count": 10*1000*1000
+        }
+            
+        "autoclean" : {
+            "size" : 512*1024*1024
+            "count" : 1000*1000
+            "days" : 90
+            "samename" : 10
+        }
+    }
 
     return result
 
