@@ -184,7 +184,7 @@ class Trash(object):
         Удаляет файл блокировки.
 
         """
-        os.remove(self.lock_file)
+        os.remove(self.get_lock_file_path())
 
         # Значения известны только во время блокировки
         self._size = None
@@ -406,7 +406,7 @@ class Trash(object):
             logging.debug(debug_msg)
             os.makedirs(new_path)
 
-        mask = os.path.join(old_path, "*")
+        mask = os.path.join(new_path, "*")
         elements = self.search(mask)
         for path in elements:
             is_dir = os.path.exists(self.to_internal(path))
@@ -438,7 +438,7 @@ class Trash(object):
         delta_size = utils.files_size(path)
         delta_count = utils.files_count(path)
         new_size = self.get_size() + delta_size
-        new_count = self.get_size() + delta_count
+        new_count = self.get_count() + delta_count
 
         trash_dir = utils.absolute_path(self.directory)
         if os.path.commonprefix((path, trash_dir)) == trash_dir:

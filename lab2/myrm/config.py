@@ -12,36 +12,6 @@
 import json
 
 
-def get_default_config():
-    """Возвращает программно заданный словарь конфигураций.
-    """
-    result = {
-        "force" : False,
-        "dryrun" : False,
-        "verbose" : True,
-        "interactive" : False,
-        "replace" : False,
-        "allowautoclean" : True,
-
-        "trash" : {
-            "dir" : "~/.trash",
-            "lockfile" : "lock",
-
-            "max_size" : 1024*1024*1024,
-            "max_count": 10*1000*1000,
-        },
-
-        "autoclean" : {
-            "size" : 512*1024*1024,
-            "count" : 1000*1000,
-            "days" : 90,
-            "samename" : 10,
-        }
-    }
-
-    return result
-
-
 def save_to_json(cfg, filename):
     """Сохраняет объект конфигурации в JSON файл.
 
@@ -84,7 +54,7 @@ def _recursive_save_to_cfg(output_file, dct, prefix=""):
         if isinstance(dct[key], dict):
             _recursive_save_to_cfg(output_file, dct[key], node)
         else:
-            fmt = "\n{node!s} = {value!r}\n"
+            fmt = "\n{node!s} = {value!s}\n"
             line = fmt.format(node=node, value=dct[key])
             output_file.write(line)
 
@@ -120,6 +90,8 @@ def load_from_cfg(filename):
     Выбрасывает ValueError если файл имеет плохой формат.
 
     """
+    result = {}
+
     with open(filename, mode="r") as input_file:
         line_num = 0
         for line in input_file.readlines():
@@ -132,14 +104,16 @@ def load_from_cfg(filename):
             if len(node_value) != 2:
                 raise ValueError("Too many '=' in line %d" % line_num)
             node = node_value[0]
-            value_str = node_value[1]
+            value_str = node_value[1].strip()
             node_path = node.split(".")
             try:
-                value = bool(value_str)
+                value = int(value_str)
             except ValueError:
-                try:
-                    value = int(value_str)
-                except ValueError:
+                if value_str.lower() == "true":
+                    value = True
+                elif value_str.lower() == "false":
+                    value = False
+                else:
                     value = value_str
 
             point = result

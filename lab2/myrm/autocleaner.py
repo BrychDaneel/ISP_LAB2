@@ -75,7 +75,7 @@ class Autocleaner(object):
 
         with self.trash.lock():
             index = 0
-            while clean_count <= self.trash.files_count:
+            while clean_count <= self.trash.get_count():
                 path, dtime = file_time_list[index]
                 debug_fmt = ("Removing {path}(removed time: {dtime}) "
                              "to free bukkit({excess} files excess)")
@@ -106,7 +106,7 @@ class Autocleaner(object):
                 path, dtime = file_time_list[index]
                 debug_fmt = ("Removing {path} (removed time: {dtime})"
                              "to free bukkit({excess} bytes excess)")
-                excess = self.trash.trash_size - clean_size
+                excess = self.trash.get_size() - clean_size
                 debug_line = debug_fmt.format(path=path, dtime=dtime,
                                               excess=excess)
                 logging.debug(debug_line)
@@ -137,7 +137,8 @@ class Autocleaner(object):
                         debug_line = debug_fmt.format(path=path, dtime=dtime)
                         logging.debug(debug_line)
                         path_int = self.trash.to_internal(path)
-                        last_version = len(stamp.get_versions_list(path_int)) - 1
+                        last_version = len(stamp.get_versions_list(path_int))
+                        last_version -= 1
                         self.trash.remove(path, last_version)
 
 

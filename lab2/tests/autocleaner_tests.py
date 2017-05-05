@@ -9,9 +9,9 @@ import myrm
 import myrm.stamp as stamp
 import myrm.utils as utils
 import myrm.config as config
-import myrm.autoclean as autoclean
 
 from myrm.trash import Trash
+from myrm.autocleaner import Autocleaner
 
 
 class TrashTests(unittest.TestCase):
@@ -22,66 +22,50 @@ class TrashTests(unittest.TestCase):
         self.files_folder = os.path.join(self.folder, "files")
         
         os.makedirs(self.files_folder)
-        open(os.path.join(self.files_folder, "a.txt"), "w").close()
-        open(os.path.join(self.files_folder, "b.txt"), "w").close()
-        open(os.path.join(self.files_folder, "c.png"), "w").close()
+        with open(os.path.join(self.files_folder, "a.txt"), "w") as f:
+            f.write("1234567890")
+        with open(os.path.join(self.files_folder, "b.txt"), "w") as f:
+            f.write("12345")
+        with open(os.path.join(self.files_folder, "c.png"), "w"):
+            pass
+
         os.makedirs(os.path.join(self.files_folder, "e"))
-        open(os.path.join(self.files_folder, "e", "f.txt"), "w").close()
-        open(os.path.join(self.files_folder, "e", "g.txt"), "w").close()
-        open(os.path.join(self.files_folder, "e", "h.png"), "w").close()
+        with open(os.path.join(self.files_folder, "e", "f.txt"), "w") as f:
+            f.write("1234567890")
+        with open(os.path.join(self.files_folder, "e", "g.txt"), "w") as f:
+            f.write("12345")
+        with open(os.path.join(self.files_folder, "e", "h.png"), "w"):
+            pass
+
         os.makedirs(os.path.join(self.files_folder, "e","k"))
-        open(os.path.join(self.files_folder, "e", "k","l.txt"), "w").close()
-        
-        path = os.path.join(self.files_folder, "a.txt")
-        f = open(path, "w")
-        f.write("1234567890")
-        f.close()
-        
-        path = os.path.join(self.files_folder, "b.txt")
-        f = open(path, "w")
-        f.write("12345")
-        f.close()
-        
-        
-        path = os.path.join(self.files_folder, "e", "f.txt")
-        f = open(path, "w")
-        f.write("1234567890")
-        f.close()
-        
-        path = os.path.join(self.files_folder, "e", "g.txt")
-        f = open(path, "w")
-        f.write("12345")
-        f.close()
-        
-        cfg = config.get_default_config()
-        cfg["force"] = False
-        cfg["dryrun"] = False
-        cfg["verbose"] = False
-        cfg["interactive"] = False
+        with open(os.path.join(self.files_folder, "e", "k","l.txt"), "w"):
+            pass
 
-        cfg["trash"]["dir"] = os.path.join(self.folder, ".trash")
-        cfg["trash"]["lockfile"] = "lock"
-        cfg["trash"]["allowautoclean"] = True
+        trash_cfg = {
+            "directory" : os.path.join(self.folder, ".trash"),
+            "lock_file" : "lock",
 
-        cfg["trash"]["max"]["size"] = 1024
-        cfg["trash"]["max"]["count"] = 100
+            "max_size" : 1024,
+            "max_count": 100
+        }
         
-        self.trash = Trash(cfg)
-        self.trash.lock()
-        self.trash.add(os.path.join(self.files_folder, "a.txt"))
-        self.trash.add(os.path.join(self.files_folder, "b.txt"))
-        self.trash.add(os.path.join(self.files_folder, "c.png"))
-        self.trash.add(os.path.join(self.files_folder, "e", "f.txt"))
-        self.trash.add(os.path.join(self.files_folder, "e", "g.txt"))
-        self.trash.add(os.path.join(self.files_folder, "e", "h.png"))
-        self.trash.add(os.path.join(self.files_folder, "e", "k","l.txt"))
+        self.trash = Trash(**trash_cfg)
+
+        with self.trash.lock():
+            self.trash.add(os.path.join(self.files_folder, "a.txt"))
+            self.trash.add(os.path.join(self.files_folder, "b.txt"))
+            self.trash.add(os.path.join(self.files_folder, "c.png"))
+            self.trash.add(os.path.join(self.files_folder, "e", "f.txt"))
+            self.trash.add(os.path.join(self.files_folder, "e", "g.txt"))
+            self.trash.add(os.path.join(self.files_folder, "e", "h.png"))
+            self.trash.add(os.path.join(self.files_folder, "e", "k","l.txt"))
         
-        path = os.path.join(self.files_folder, "a.txt")
-        for i in xrange(1,5):
-            open(path, "w").close
-            self.trash.add(path)
-            
-        self.trash.unlock()
+            path = os.path.join(self.files_folder, "a.txt")
+            for i in xrange(1,5):
+                open(path, "w").close
+                self.trash.add(path)
+    
+        self.autocleaner = Autocleaner(self.trash)
         
     def tearDown(self):
         for dirpath, dirnames, filenames in os.walk(self.folder, topdown=False):
@@ -93,11 +77,12 @@ class TrashTests(unittest.TestCase):
                 
     def test_size(self):
         directory = self.files_folder
-        self.trash.cfg["trash"]["autoclean"]["size"] = 6
-        self.trash.cfg["trash"]["autoclean"]["count"] = 20
-        self.trash.cfg["trash"]["autoclean"]["days"] = 1
-        self.trash.cfg["trash"]["autoclean"]["samename"] = 10
-        autoclean.autoclean(self.trash)
+        self.autocleaner.size = 6
+        self.autocleaner.count = 20
+        self.autocleaner.days = 1
+        self.autocleaner.same_count = 10
+
+        self.autocleaner.autoclean()
         
         path = os.path.join(directory, "*.*")
         
@@ -114,11 +99,12 @@ class TrashTests(unittest.TestCase):
 
     def test_count(self):
         directory = self.files_folder
-        self.trash.cfg["trash"]["autoclean"]["size"] = 100
-        self.trash.cfg["trash"]["autoclean"]["count"] = 4
-        self.trash.cfg["trash"]["autoclean"]["days"] = 1
-        self.trash.cfg["trash"]["autoclean"]["samename"] = 10
-        autoclean.autoclean(self.trash)
+        self.autocleaner.size = 100
+        self.autocleaner.count = 4
+        self.autocleaner.days = 1
+        self.autocleaner.same_count = 10
+
+        self.autocleaner.autoclean()
         
         path = os.path.join(directory, "*.*")
         files_vers = self.trash.search(path, recursive=True)
@@ -133,11 +119,12 @@ class TrashTests(unittest.TestCase):
     
     def test_same(self):
         directory = self.files_folder
-        self.trash.cfg["trash"]["autoclean"]["size"] = 100
-        self.trash.cfg["trash"]["autoclean"]["count"] = 100
-        self.trash.cfg["trash"]["autoclean"]["days"] = 1
-        self.trash.cfg["trash"]["autoclean"]["samename"] = 3
-        autoclean.autoclean(self.trash)
+        self.autocleaner.size = 100
+        self.autocleaner.count = 100
+        self.autocleaner.days = 1
+        self.autocleaner.same_count = 3
+
+        self.autocleaner.autoclean()
         
         path = os.path.join(directory, "*.*")
         files_vers = self.trash.search(path, recursive=True)
@@ -155,17 +142,17 @@ class TrashTests(unittest.TestCase):
         
     def test_old(self):
         directory = self.files_folder
-        self.trash.cfg["trash"]["autoclean"]["size"] = 100
-        self.trash.cfg["trash"]["autoclean"]["count"] = 100
-        self.trash.cfg["trash"]["autoclean"]["days"] = 1
-        self.trash.cfg["trash"]["autoclean"]["samename"] = 10
+        self.autocleaner.size = 100
+        self.autocleaner.count = 100
+        self.autocleaner.days = 1
+        self.autocleaner.same_count = 10
         
         path_int = os.path.join(self.files_folder, "b.txt")
         path_int = self.trash.to_internal(path_int)
         path_stamp = stamp.add_stamp(path_int, datetime.datetime(1990, 1, 1))
         open(path_stamp, "w").close()
         
-        autoclean.autoclean(self.trash)
+        self.autocleaner.autoclean()
         
         path = os.path.join(directory, "*.*")
         files_vers = self.trash.search(path, recursive=True)
@@ -190,12 +177,12 @@ class TrashTests(unittest.TestCase):
         
     def test_count_same(self):
         directory = self.files_folder
-        self.trash.cfg["trash"]["autoclean"]["size"] = 100
-        self.trash.cfg["trash"]["autoclean"]["count"] = 5
-        self.trash.cfg["trash"]["autoclean"]["days"] = 1
-        self.trash.cfg["trash"]["autoclean"]["samename"] = 2
+        self.autocleaner.size = 100
+        self.autocleaner.count = 5
+        self.autocleaner.days = 1
+        self.autocleaner.same_count = 2
         
-        autoclean.autoclean(self.trash)
+        self.autocleaner.autoclean()
         
         path = os.path.join(directory, "*.*")
         files_vers = self.trash.search(path, recursive=True)

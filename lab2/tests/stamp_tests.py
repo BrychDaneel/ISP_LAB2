@@ -109,9 +109,12 @@ class StampTimesTests(unittest.TestCase):
         self.new_path2 = stamp.add_stamp(self.path, self.dtime2)
         self.new_path3 = stamp.add_stamp(self.path, self.dtime3)
         
-        open(self.new_path1, "w").close()
-        open(self.new_path2, "w").close()
-        open(self.new_path3, "w").close()
+        with open(self.new_path1, "w"):
+            pass
+        with open(self.new_path2, "w"):
+            pass
+        with open(self.new_path3, "w"):
+            pass
         
         
     def tearDown(self):

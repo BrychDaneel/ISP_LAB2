@@ -79,7 +79,7 @@ def split_stamp(path):
     try:
         sec = int(rm_dt)
         msec = int(rm_msec)
-        dtime = datetime.datetime.fromtimestamp(sec)
+        dtime = datetime.datetime.utcfromtimestamp(sec)
         dtime += datetime.timedelta(microseconds=msec)
         return filename, dtime
     except ValueError:

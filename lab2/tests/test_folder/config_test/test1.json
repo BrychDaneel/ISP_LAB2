@@ -1,22 +1,20 @@
 {
-  "dryrun": false, 
-  "verbose": false, 
-  "replace": false, 
+  "allowautoclean": true, 
   "force": false, 
+  "verbose": false, 
+  "autoclean": {
+    "count": 54321, 
+    "samename": 10, 
+    "days": 90, 
+    "size": 536870912
+  }, 
+  "dryrun": false, 
+  "replace": false, 
   "trash": {
-    "max": {
-      "count": 10000000, 
-      "size": 1073741824
-    }, 
     "lockfile": "lock", 
-    "allowautoclean": true, 
-    "autoclean": {
-      "count": 54321, 
-      "samename": 10, 
-      "days": 90, 
-      "size": 536870912
-    }, 
-    "dir": "~/.trash"
+    "max_size": 1073741824, 
+    "dir": "~/.trash", 
+    "max_count": 10000000
   }, 
   "interactive": false
 }

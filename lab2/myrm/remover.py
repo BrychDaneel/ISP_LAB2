@@ -49,17 +49,17 @@ class Remover(object):
 
     def configurate(self, force=False, dryrun=False, interactive=False,
                     auto_replace=False, allow_autoclean=True,
-                    trash_parametrs={}, autoclean_parametrs={}):
+                    trash={}, autoclean={}):
         """
         """
         self.force = force
         self.dryrun = dryrun
         self.interactive = interactive
         self.auto_replace = auto_replace
-        self.allowautoclean = allowautoclean
+        self.allow_autoclean = allow_autoclean
 
-        self.trash.configurate(trash_parametrs)
-        self.autocleaner.configurate(autoclean_parametrs)
+        self.trash.configurate(**trash)
+        self.autocleaner.configurate(**autoclean)
 
     def remove(self, path_mask, recursive=False):
         """Удаляет фалйы по маске в корзину.

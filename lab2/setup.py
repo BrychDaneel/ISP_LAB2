@@ -3,11 +3,11 @@ from os.path import join, dirname
 
 setup(
     name='myrm',
-    version='0.1',
+    version='0.2',
     packages=find_packages(),
     entry_points={
         'console_scripts':
-            ['myrm = myrm:main',
-             'mrm = myrm:shor_rm']
+            ['myrm = myrm:__main__:main',
+             'mrm = myrm:__main__:shor_rm']
         }
     )
