@@ -1,14 +1,6 @@
 # -*- coding: utf-8 -*-
 
-"""Здесь собранны функции очистки корзины по разным критериям.
-
-Функции, экспортируемые данным модулем:
-    * _clean_by_date -- очиска по дате удаления
-    * _clean_by_files_count -- очиска по числу файлов
-    * _clean_by_trash_size -- очиска по размеру файлов
-    * _clean_by_same_count -- очиска файлов с одинаковым именем
-    * autoclean -- очистка по всем критериям
-
+"""Содержит класс Autocleaner, который производит автоочистку корзины.
 """
 
 
@@ -18,31 +10,57 @@ import myrm.stamp as stamp
 
 
 class Autocleaner(object):
-    """
+    """Производит автоочистку корзины
+    
+    Поля класса:
+    * trash -- объект корзины
+    
+    Критерии очистки
+    * count -- число файлов
+    * size -- размер
+    * days -- количество дней
+    * same_count -- число файлов
+
+    Методы класса:
+    * clean_by_date -- очиска по дате удаления
+    * clean_by_files_count -- очиска по числу файлов
+    * clean_by_trash_size -- очиска по размеру файлов
+    * clean_by_same_count -- очиска файлов с одинаковым именем
+    * autoclean -- очистка по всем критериям
+    
     """
 
     def __init__(self, trash, **kargs):
-        """
+        """Создает объект для определенной корзины.
+        
+        Непозиционные аргументы:
+        * count -- число файлов для очистки
+        * size -- размер для очистки
+        * days -- количество дней для очистки
+        * same_count -- число файлов для очистки
+        
         """
         self.trash = trash
         self.configurate(**kargs)
 
     def configurate(self, count=1000*1000, size=512*1024*1024,
                     days=90, same_count=10):
-        """
+        """Обновляет поля объекта.
+        
+        Непозиционные аргументы:
+        * count -- число файлов для очистки
+        * size -- размер для очистки
+        * days -- количество дней для очистки
+        * same_count -- число файлов для очистки
+        
         """
         self.count = count
         self.size = size
         self.days = days
         self.same_count = same_count
 
-
     def autoclean_by_date(self):
-        """Очищает по дате удаления.
-
-        Позицонные аргументы:
-        * trash -- объект корзины
-
+        """Очищает корзину по дате удаления.
         """
         clear_days = self.days
 
@@ -61,13 +79,8 @@ class Autocleaner(object):
                 last_version = len(stamp.get_versions_list(path_int)) - 1
                 self.trash.remove(path, last_version)
 
-
     def autoclean_by_files_count(self):
         """Очищает по числу файлов. Возвращает новый список файлов.
-
-        Позицонные аргументы:
-        * trash -- объект корзины
-
         """
         clean_count = self.count
 
@@ -88,13 +101,8 @@ class Autocleaner(object):
                 self.trash.remove(path, last_version)
                 index += 1
 
-
     def autoclean_by_trash_size(self):
-        """Очищает по размеру файлов.
-
-        Позицонные аргументы:
-        * trash -- объект корзины
-
+        """Очищает корзину по размеру файлов.
         """
         clean_size = self.size
 
@@ -115,13 +123,8 @@ class Autocleaner(object):
                 self.trash.remove(path, last_version)
                 index += 1
 
-
     def autoclean_by_same_count(self):
         """Очищает файлы с одинаковые.
-
-        Позицонные аргументы:
-        * trash -- объект корзины
-
         """
         clean_same_count = self.same_count
 
@@ -141,12 +144,8 @@ class Autocleaner(object):
                         last_version -= 1
                         self.trash.remove(path, last_version)
 
-
     def autoclean(self):
         """Производит очиску корзины. Возвращает кол-во файлов и размер.
-
-        Позицонные аргументы:
-        * trash -- объект корзины
 
         Критерии очистки:
         * по дате удаления
@@ -154,10 +153,7 @@ class Autocleaner(object):
         * по размеру файлов
         * очиска файлов с одинаковым именем
 
-        Информациия для очистки берется из файла конфингурации корзины.
-
-        Перед началом работы проверяет блокировку корзины и блокирует,
-        если она отсутствует.
+        Блокирует корзину.
 
         """
 
@@ -173,3 +169,4 @@ class Autocleaner(object):
         delta_size -= self.trash.get_size()
 
         return delta_count, delta_size
+

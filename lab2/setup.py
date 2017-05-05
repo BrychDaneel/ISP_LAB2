@@ -7,7 +7,7 @@ setup(
     packages=find_packages(),
     entry_points={
         'console_scripts':
-            ['myrm = myrm:__main__:main',
-             'mrm = myrm:__main__:shor_rm']
+            ['myrm = myrm.__main__:main',
+             'mrm = myrm.__main__:shor_rm']
         }
     )

@@ -100,9 +100,21 @@ def files_size(path):
 
 
 def absolute_path(path):
-    """
+    """Возвращает обсалютный путь с переменными пользователя.
     """
     path_expand = os.path.expanduser(path)
     path_abs = os.path.abspath(path_expand)
     return path_abs
+
+
+def is_empty(directory):
+    """Возвращает пуста ли директория.
+    """
+    iterator = os.walk(directory)
+    iterator.next()
+    try:
+        iterator.next()
+        return False
+    except StopIteration:
+        return True
 

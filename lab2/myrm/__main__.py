@@ -1,39 +1,70 @@
 # -*- coding: utf-8 -*-
+
+
+"""Содержит точки входа.
+
+Функции модуля:
+* get_default_MyRm -- возвращает объект MyRm созданного при помощи
+                      файла конфигурации по-умолчанию.
+* main -- главная тока входа в скрипт
+* mrm -- укороченная точка входа в скрипт
+
+"""
+
+
 import argparse
 import logging
 
-import myrm.config as config 
+import myrm.config as config
 
 from myrm.remover import Remover
 
-def get_argument_parcer(remove_only=False):
+
+def _get_argument_parcer(remove_only=False):
+    """Возвращает настроееный парсер аргументов.
+
+    Непозиционные аргументы:
+    * remove_only -- короткая точка входа
+
     """
-    """
-    parser = argparse.ArgumentParser(prog="myrm")
+    description = ("Utiletes that help remove file.  Useds bukkit. All "
+                   "operation(except autoclean) use Unix filemask "
+                   "to select targect. You can use all operration like if "
+                   "all files present in folder.")
+    parser = argparse.ArgumentParser(prog="myrm", description=description)
 
     if not remove_only:
         parser.add_argument("command",
-                            choices=["rm", "rs", "ls", "clear", "autoclear"])
+                            choices=["rm", "rs", "ls", "clear", "autoclear"],
+                            help="rm - remove file by mask | "
+                            "rs - restore file  by mask | "
+                            "clear - clear files from trash by mask | "
+                            "autoclear - clear trash to optional parametrs | "
+                            "ls - list of file in trash by mask")
 
-    parser.add_argument("filemasks", nargs='+')
+    parser.add_argument("filemasks", nargs='+',
+                        help="unix-style regular expression to select targect.")
 
     parser.add_argument("-r", "-R", "--recursive",
-                        dest="recursive", action="store_true")
+                        dest="recursive", action="store_true",
+                        help="perfom recursive search.")
 
     parser.add_argument("-o", "--old", dest="old", default=0,
-                        help="Choose version of file.")
+                        help="choose version of file.")
 
     parser.add_argument("-a", "--all", dest="versions",
                         action="store_true",
                         help="display all versions of files.")
 
-    parser.add_argument("--config", default=None)
+    parser.add_argument("--config", default=None,
+                        help="use configuration file.")
 
-    parser.add_argument("--jsonconfig", default=None)
+    parser.add_argument("--jsonconfig", default=None,
+                        help="use configuration file.")
 
     parser.add_argument("-v", "--verbose", dest="verbose",
                         action="store_false",
-                        help="show list of operate files.")
+                        help="show operation log.")
 
     parser.add_argument("-d", "--dryrun", dest="dryrun",
                         action="store_const", const=True,
@@ -49,9 +80,25 @@ def get_argument_parcer(remove_only=False):
     return parser
 
 
-def perfome(remover, operation, file_mask, how_old=0,
-            recursive=False, versions=False):
-    """
+def _perfome(remover, operation, file_mask, how_old=0,
+             recursive=False, versions=False):
+    """Выполняет операции с помощью объекта Remover.
+
+    Позиционные аргументы:
+    * remover -- объект выполняющие операции
+    * operation -- операции:
+        + rm -- удалить
+        + rs -- востановить
+        + ls -- список файлов
+        + clear -- очистка файлов
+
+    * file_mask -- маска в Unix формате
+
+    Непозиционные аргументы:
+    * how_old -- указывает на версию файла
+    * recursive -- проводить рекурсивный поиск
+    * versions выводить все версии файла
+
     """
     if operation == "rm":
         dcount, dsize = remover.remove(file_mask, ecursive=recursive)
@@ -73,18 +120,14 @@ def perfome(remover, operation, file_mask, how_old=0,
     elif operation == "clear":
         dcount, dsize = remover.clean(file_mask, recursive=recursive,
                                       how_old=how_old)
-
-    elif operation == "autoclear":
-        dcount, dsize = remover.autoclean()
-
     else:
         raise ValueError("Unsoported operation {}".format(operation))
 
     return dcount, dsize
 
 
-def log_summ(operation, count, size):
-    """
+def _log_summ(operation, count, size):
+    """Логирует результат проведенных операций.
     """
     if operation == "rm":
         log_fmt = "{count} files ({size} bytes) was removed."
@@ -115,7 +158,7 @@ def main(remove_only=False):
 
     Операциии и аргументы беруться из командной строки.
     """
-    parser = get_argument_parcer(remove_only=remove_only)
+    parser = _get_argument_parcer(remove_only=remove_only)
     args = parser.parse_args()
 
     remover_parametrs = {}
@@ -146,17 +189,20 @@ def main(remove_only=False):
     else:
         operation = args.command
 
-    count = 0
-    size = 0
-    for file_mask in args.filemasks:
-        dsize, dcount = perfome(mrm, operation, file_mask,
-                                how_old=args.how_old,
-                                recursive=args.recursive,
-                                versions=args.versions)
-        count += dcount
-        size += dsize
+    if operation == "autoclear":
+        count, size = mrm.autoclean()
+    else:
+        count = 0
+        size = 0
+        for file_mask in args.filemasks:
+            dsize, dcount = _perfome(mrm, operation, file_mask,
+                                     how_old=args.how_old,
+                                     recursive=args.recursive,
+                                     versions=args.versions)
+            count += dcount
+            size += dsize
 
-    log_summ(operation, count, size)
+    _log_summ(operation, count, size)
 
 
 def remove():
@@ -167,3 +213,4 @@ def remove():
 
 if __name__ == "__main__":
     main()
+
