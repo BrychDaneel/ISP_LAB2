@@ -104,9 +104,9 @@ class Trash(object):
         # Значения известны только во время блокировки
         self._size = None
         self._count = None
-        
+
     def configurate(self, directory="~/.trash", lock_file="lock",
-                 max_size=1024*1024*1024, max_count=10*1000*1000):
+                    max_size=1024*1024*1024, max_count=10*1000*1000):
         """
         """
         self.directory = directory
@@ -114,7 +114,7 @@ class Trash(object):
 
         self.max_size = max_size
         self.max_count = max_count
-        
+
     def get_size(self):
         """
         """
@@ -122,13 +122,13 @@ class Trash(object):
             return self._size
         else:
             lock_file = self.get_lock_file_path()
-            size = utils.files_size(trash_dir)
-            
+            size = utils.files_size(self.directory)
+
             # Файл блокировки также содержиться в корзине
             size -= utils.files_size(lock_file)
-            
+
             return size
-    
+
     def get_count(self):
         """
         """
@@ -136,11 +136,11 @@ class Trash(object):
             return self._count
         else:
             lock_file = self.get_lock_file_path()
-            count = utils.files_count(trash_dir)
-            
+            count = utils.files_count(self.directory)
+
             # Файл блокировки также содержиться в корзине
             count -= utils.files_count(lock_file)
-            
+
             return count
 
     def get_lock_file_path(self):
@@ -454,7 +454,7 @@ class Trash(object):
         else:
             self.add_file(path)
 
-        if self.locked:
+        if self.is_locked():
             self._size = new_size
             self._count = new_count
 
@@ -491,7 +491,7 @@ class Trash(object):
         else:
             self.restore_file(path, how_old=how_old)
 
-        if self.locked:
+        if self.is_locked():
             self._size -= delta_size
             self._count -= delta_count
 
@@ -541,7 +541,7 @@ class Trash(object):
                     os.remove(os.path.join(dirpath, element))
                 os.rmdir(dirpath)
 
-        if self.locked:
+        if self.is_locked():
             self._size = self._size - delta_size
             self._count = self._count - delta_count
 

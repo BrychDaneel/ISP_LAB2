@@ -67,15 +67,15 @@ def split_stamp(path):
     first_prefix, sep, sufix = path.rpartition("_")
     if sep != "_" or len(sufix) > 0:
         return path, None
-    
+
     second_prefix, sep, rm_msec = first_prefix.rpartition("_rmmsec=")
     if sep != "_rmmsec=":
-        return path, None     
-    
+        return path, None
+
     filename, sep, rm_dt = second_prefix.rpartition("_rmdt=")
     if sep != "_rmdt=":
         return path, None
-    
+
     try:
         sec = int(rm_dt)
         msec = int(rm_msec)

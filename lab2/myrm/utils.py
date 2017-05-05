@@ -89,7 +89,7 @@ def files_size(path):
     if not os.path.isdir(path):
         if os.path.exists(path):
             return os.lstat(path).st_size
-        else
+        else:
             return 0
     ans = 0
     for dirpath, dirnames, filenames in os.walk(path):
@@ -100,7 +100,9 @@ def files_size(path):
 
 
 def absolute_path(path):
+    """
+    """
     path_expand = os.path.expanduser(path)
     path_abs = os.path.abspath(path_expand)
-    return path_abs 
+    return path_abs
 

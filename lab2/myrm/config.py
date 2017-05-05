@@ -16,26 +16,26 @@ def get_default_config():
     """Возвращает программно заданный словарь конфигураций.
     """
     result = {
-        "force" : False
-        "dryrun" : False
-        "verbose" : True
-        "interactive" : False
-        "replace" : False
-        "allowautoclean" : True
-        
-        "trash" : {
-            "dir" : "~/.trash"
-            "lockfile" : "lock"
+        "force" : False,
+        "dryrun" : False,
+        "verbose" : True,
+        "interactive" : False,
+        "replace" : False,
+        "allowautoclean" : True,
 
-            "max_size" : 1024*1024*1024
-            "max_count": 10*1000*1000
-        }
-            
+        "trash" : {
+            "dir" : "~/.trash",
+            "lockfile" : "lock",
+
+            "max_size" : 1024*1024*1024,
+            "max_count": 10*1000*1000,
+        },
+
         "autoclean" : {
-            "size" : 512*1024*1024
-            "count" : 1000*1000
-            "days" : 90
-            "samename" : 10
+            "size" : 512*1024*1024,
+            "count" : 1000*1000,
+            "days" : 90,
+            "samename" : 10,
         }
     }
 
@@ -116,11 +116,10 @@ def load_from_cfg(filename):
 
     Позицонные аргументы:
     filename -- имя входного файла
-    
+
     Выбрасывает ValueError если файл имеет плохой формат.
 
     """
-    result = get_default_config()
     with open(filename, mode="r") as input_file:
         line_num = 0
         for line in input_file.readlines():
@@ -131,14 +130,17 @@ def load_from_cfg(filename):
                 continue
             node_value = line.split("=")
             if len(node_value) != 2:
-                raise ValueError("Too many '=' in line %s" % line_num)
+                raise ValueError("Too many '=' in line %d" % line_num)
             node = node_value[0]
-            value = node_value[1]
+            value_str = node_value[1]
             node_path = node.split(".")
             try:
-                value = eval(value)
-            except Exception:
-                raise ValueError("Bad value in line %s" % line_num)
+                value = bool(value_str)
+            except ValueError:
+                try:
+                    value = int(value_str)
+                except ValueError:
+                    value = value_str
 
             point = result
             for key in node_path[0:-1]:
