@@ -12,6 +12,7 @@
 """
 
 
+import sys
 import argparse
 import logging
 
@@ -35,11 +36,10 @@ def _get_argument_parcer(remove_only=False):
 
     if not remove_only:
         parser.add_argument("command",
-                            choices=["rm", "rs", "ls", "clear", "autoclear"],
+                            choices=["rm", "rs", "ls", "clear"],
                             help="rm - remove file by mask | "
                             "rs - restore file  by mask | "
                             "clear - clear files from trash by mask | "
-                            "autoclear - clear trash to optional parametrs | "
                             "ls - list of file in trash by mask")
 
     parser.add_argument("filemasks", nargs='+',
@@ -145,11 +145,6 @@ def _log_summ(operation, count, size):
         log_msg = log_fmt.format(count=count, size=size)
         logging.info(log_msg)
 
-    elif operation == "autoclear":
-        log_fmt = "{count} files ({size} bytes) was cleaned."
-        log_msg = log_fmt.format(count=count, size=size)
-        logging.info(log_msg)
-
     elif operation == "ls":
         pass
 
@@ -186,7 +181,12 @@ def main(remove_only=False):
     if not args.silence:
         logging.basicConfig(format="%(message)s", level=logging.INFO)
 
-    mrm = Remover(**remover_parametrs)
+    try:
+        mrm = Remover(**remover_parametrs)
+    except TypeError:
+        if not args.silence:
+            print("Bad config.")
+        sys.exit(1)
 
     if remove_only:
         operation = "rm"
@@ -194,25 +194,21 @@ def main(remove_only=False):
         operation = args.command
 
     try:
-        if operation == "autoclear":
-            count, size = mrm.autoclean()
-        else:
-            count = 0
-            size = 0
-            for file_mask in args.filemasks:
-                dcount, dsize = _perfome(mrm, operation, file_mask,
-                                        how_old=args.how_old,
-                                        recursive=args.recursive,
-                                        versions=args.versions)
-                count += dcount
-                size += dsize
+        count = 0
+        size = 0
+        for file_mask in args.filemasks:
+            dcount, dsize = _perfome(mrm, operation, file_mask,
+                                     how_old=args.how_old,
+                                     recursive=args.recursive,
+                                     versions=args.versions)
+            count += dcount
+            size += dsize
+    except Exception as Error:
+        if not args.silence:
+            print(Error)
+        sys.exit(1)
 
-        _log_summ(operation, count, size)
-    except:
-        if args.silence:
-            sys.exit(-1)
-        else:
-            raise
+    _log_summ(operation, count, size)
 
 def remove():
     """Краткая точка входа. Выполняет удаление в корзину.
