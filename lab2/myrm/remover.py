@@ -159,8 +159,8 @@ class Remover(object):
                     continue
 
                 if os.path.exists(path):
-                    if control.replace(path, auto_replace=self.auto_replace,
-                                       dryrun=self.dryrun):
+                    if not control.replace(path, auto_replace=self.auto_replace,
+                                           dryrun=self.dryrun):
                         continue
 
                 try:

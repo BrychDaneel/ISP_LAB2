@@ -8,6 +8,6 @@ setup(
     entry_points={
         'console_scripts':
             ['myrm = myrm.__main__:main',
-             'mrm = myrm.__main__:shor_rm']
+             'mrm = myrm.__main__:remove']
         }
     )

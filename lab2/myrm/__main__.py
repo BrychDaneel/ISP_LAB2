@@ -49,7 +49,7 @@ def _get_argument_parcer(remove_only=False):
                         dest="recursive", action="store_true",
                         help="perfom recursive search.")
 
-    parser.add_argument("-o", "--old", dest="old", default=0,
+    parser.add_argument("-o", "--old", dest="how_old", default=0,
                         help="choose version of file.")
 
     parser.add_argument("-a", "--all", dest="versions",
@@ -62,9 +62,9 @@ def _get_argument_parcer(remove_only=False):
     parser.add_argument("--jsonconfig", default=None,
                         help="use configuration file.")
 
-    parser.add_argument("-v", "--verbose", dest="verbose",
-                        action="store_false",
-                        help="show operation log.")
+    parser.add_argument("-s", "--silence", dest="silence",
+                        action="store_true",
+                        help="don't show info messages.")
 
     parser.add_argument("-d", "--dryrun", dest="dryrun",
                         action="store_const", const=True,
@@ -101,7 +101,7 @@ def _perfome(remover, operation, file_mask, how_old=0,
 
     """
     if operation == "rm":
-        dcount, dsize = remover.remove(file_mask, ecursive=recursive)
+        dcount, dsize = remover.remove(file_mask, recursive=recursive)
 
     elif operation == "rs":
         dcount, dsize = remover.restore(file_mask, recursive=recursive,
@@ -110,12 +110,13 @@ def _perfome(remover, operation, file_mask, how_old=0,
     elif operation == "ls":
         files = remover.lst(file_mask, recursive=recursive, versions=versions)
         for path, version in files:
-            if not versions:
-                log_msg = path
+            if not versions or version is None:
+                msg = path
             else:
                 version_str = version.strftime("%d.%m.%Y %I:%M")
-                log_msg = "{} (removed {})".format(path, version_str)
-            logging.info(log_msg)
+                msg = "{} (removed {})".format(path, version_str)
+            print(path)
+        return 0, 0
 
     elif operation == "clear":
         dcount, dsize = remover.clean(file_mask, recursive=recursive,
@@ -149,6 +150,9 @@ def _log_summ(operation, count, size):
         log_msg = log_fmt.format(count=count, size=size)
         logging.info(log_msg)
 
+    elif operation == "ls":
+        pass
+
     else:
         raise ValueError("Unsoported operation {}".format(operation))
 
@@ -179,7 +183,7 @@ def main(remove_only=False):
         remover_parametrs["interactive"] = args.interactive
 
 
-    if args.verbose:
+    if not args.silence:
         logging.basicConfig(format="%(message)s", level=logging.INFO)
 
     mrm = Remover(**remover_parametrs)
@@ -189,21 +193,26 @@ def main(remove_only=False):
     else:
         operation = args.command
 
-    if operation == "autoclear":
-        count, size = mrm.autoclean()
-    else:
-        count = 0
-        size = 0
-        for file_mask in args.filemasks:
-            dsize, dcount = _perfome(mrm, operation, file_mask,
-                                     how_old=args.how_old,
-                                     recursive=args.recursive,
-                                     versions=args.versions)
-            count += dcount
-            size += dsize
+    try:
+        if operation == "autoclear":
+            count, size = mrm.autoclean()
+        else:
+            count = 0
+            size = 0
+            for file_mask in args.filemasks:
+                dcount, dsize = _perfome(mrm, operation, file_mask,
+                                        how_old=args.how_old,
+                                        recursive=args.recursive,
+                                        versions=args.versions)
+                count += dcount
+                size += dsize
 
-    _log_summ(operation, count, size)
-
+        _log_summ(operation, count, size)
+    except:
+        if args.silence:
+            sys.exit(-1)
+        else:
+            raise
 
 def remove():
     """Краткая точка входа. Выполняет удаление в корзину.
