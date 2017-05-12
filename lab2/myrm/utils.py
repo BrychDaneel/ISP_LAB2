@@ -68,22 +68,23 @@ def split_path(path):
     return result
 
 
-def files_count(path):
+def get_files_count(path):
     """Возвращает количество файлов в заданном пути.
 
     Если переданна папка, рекурсивно считает
-    файлы в ней. Иначе, возвращает 1.
+    файлы в ней. Если существующий объект, возвращает 1.
+    Иначе 0.
 
     """
     if not os.path.isdir(path):
         return 1 if os.path.exists(path) else 0
     ans = 0
-    for dirpath, dirnames, filenames in os.walk(path):
+    for _, _, filenames in os.walk(path):
         ans += len(filenames)
     return ans
 
 
-def files_size(path):
+def get_files_size(path):
     """Возвращает занимаемое на диске место данного объекта.
     """
     if not os.path.isdir(path):
@@ -92,14 +93,14 @@ def files_size(path):
         else:
             return 0
     ans = 0
-    for dirpath, dirnames, filenames in os.walk(path):
+    for dirpath, _, filenames in os.walk(path):
         for somefile in filenames:
             file_path = os.path.join(dirpath, somefile)
             ans += os.lstat(file_path).st_size
     return ans
 
 
-def absolute_path(path):
+def get_absolute_path(path):
     """Возвращает обсалютный путь с переменными пользователя.
     """
     path_expand = os.path.expanduser(path)
@@ -110,11 +111,5 @@ def absolute_path(path):
 def is_empty(directory):
     """Возвращает пуста ли директория.
     """
-    iterator = os.walk(directory)
-    iterator.next()
-    try:
-        iterator.next()
-        return False
-    except StopIteration:
-        return True
+    return len(os.listdir(directory)) == 0
 

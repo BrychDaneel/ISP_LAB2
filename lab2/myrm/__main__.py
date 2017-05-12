@@ -28,7 +28,7 @@ def _get_argument_parcer(remove_only=False):
     * remove_only -- короткая точка входа
 
     """
-    description = ("Utiletes that help remove file.  Useds bukkit. All "
+    description = ("Utility that help to remove file.  Use bucket. All "
                    "operation(except autoclean) use Unix filemask "
                    "to select targect. You can use all operration like if "
                    "all files present in folder.")
@@ -101,10 +101,10 @@ def _perfome(remover, operation, file_mask, how_old=0,
 
     """
     if operation == "rm":
-        dcount, dsize = remover.remove(file_mask, recursive=recursive)
+        dcount, dsize, dfiles = remover.remove(file_mask, recursive=recursive)
 
     elif operation == "rs":
-        dcount, dsize = remover.restore(file_mask, recursive=recursive,
+        dcount, dsize, dfiles = remover.restore(file_mask, recursive=recursive,
                                         how_old=how_old)
 
     elif operation == "ls":
@@ -115,16 +115,16 @@ def _perfome(remover, operation, file_mask, how_old=0,
             else:
                 version_str = version.strftime("%d.%m.%Y %I:%M")
                 msg = "{} (removed {})".format(path, version_str)
-            print(path)
+            print(msg)
         return 0, 0
 
     elif operation == "clear":
-        dcount, dsize = remover.clean(file_mask, recursive=recursive,
+        dcount, dsize, dfiles = remover.clean(file_mask, recursive=recursive,
                                       how_old=how_old)
     else:
         raise ValueError("Unsoported operation {}".format(operation))
 
-    return dcount, dsize
+    return dcount, dsize, dfiles
 
 
 def _log_summ(operation, count, size):
@@ -197,15 +197,15 @@ def main(remove_only=False):
         count = 0
         size = 0
         for file_mask in args.filemasks:
-            dcount, dsize = _perfome(mrm, operation, file_mask,
-                                     how_old=args.how_old,
-                                     recursive=args.recursive,
-                                     versions=args.versions)
+            dcount, dsize, dfiles = _perfome(mrm, operation, file_mask,
+                                             how_old=args.how_old,
+                                             recursive=args.recursive,
+                                             versions=args.versions)
             count += dcount
             size += dsize
-    except Exception as Error:
+    except Exception as error:
         if not args.silence:
-            print(Error)
+            print(error)
         sys.exit(1)
 
     _log_summ(operation, count, size)

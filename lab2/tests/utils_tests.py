@@ -94,13 +94,13 @@ class FilesCountTests(unittest.TestCase):
         self.folder = os.path.join(script_dir,"test_folder","utils_test")
         
     def test_1(self):
-        ans = utils.files_count(os.path.join(self.folder, "c"))
+        ans = utils.get_files_count(os.path.join(self.folder, "c"))
         result = 1
         self.assertEqual(result, ans)
     
     def test_1(self):
         result = 4
-        ans = utils.files_count(os.path.join(self.folder))
+        ans = utils.get_files_count(os.path.join(self.folder))
         self.assertEqual(result, ans)
         
         
@@ -112,20 +112,20 @@ class SizeTests(unittest.TestCase):
         
     def test_1(self):
         ans = 10
-        result = utils.files_size(os.path.join(self.folder, "b.txt"))
+        result = utils.get_files_size(os.path.join(self.folder, "b.txt"))
         self.assertEqual(result, ans)
         
     def test_2(self):
         ans = 20
-        result = utils.files_size(os.path.join(self.folder, "c", "d.txt"))
+        result = utils.get_files_size(os.path.join(self.folder, "c", "d.txt"))
         self.assertEqual(result, ans)        
     
     def test_dir1(self):
         ans = 20
-        result = utils.files_size(os.path.join(self.folder, "c"))
+        result = utils.get_files_size(os.path.join(self.folder, "c"))
         self.assertEqual(result, ans)
     
     def test_dir2(self):
         ans = 34
-        result = utils.files_size(os.path.join(self.folder))
+        result = utils.get_files_size(os.path.join(self.folder))
         self.assertEqual(result, ans) 

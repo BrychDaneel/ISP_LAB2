@@ -12,6 +12,11 @@ import myrm.config as config
 from myrm.trash import Trash
 
 
+def unify(files, directory):
+    result = [os.path.relpath(f, directory) for f in files]
+    result.sort()
+    return result 
+
 class TrashTests(unittest.TestCase):
     
     def setUp(self):
@@ -60,7 +65,7 @@ class TrashTests(unittest.TestCase):
                 os.remove(element_path)
             if not os.path.samefile(dirpath, self.folder):
                 os.rmdir(dirpath)
-            
+    
     def test_int_ext(self):
         path = os.path.join(self.files_folder, "a.txt")
         path_int = self.trash.to_internal(path)
@@ -101,23 +106,28 @@ class TrashTests(unittest.TestCase):
         path = os.path.join(directory, "f.txt")
         
         with self.trash.lock():
-            count, size  = self.trash.add(path)
+            count, size, delta_files = self.trash.add(path)
             self.assertEquals(count, 1)
             self.assertEquals(size, 10)
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["f.txt"])
             
             files = list(utils.search(directory, "*", "*"))
             files = [os.path.relpath(f, directory) for f in files]
             files.sort()
             self.assertEquals(files, ["g.txt", "h.png", "j", "k"])
             
-            count, size  = self.trash.restore(path)
+            count, size, delta_files = self.trash.restore(path)
             self.assertEquals(count, 1)
             self.assertEquals(size, 10)
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["f.txt"])
             
             files = list(utils.search(directory, "*", "*"))
             files = [os.path.relpath(f, directory) for f in files]
             files.sort()
             self.assertEquals(files, ["f.txt", "g.txt", "h.png", "j", "k"])
+            
 
         
         
@@ -159,13 +169,18 @@ class TrashTests(unittest.TestCase):
         path = os.path.join(directory, "f.txt")
         
         with self.trash.lock():  
-            count, size = self.trash.add(path)
+            count, size, delta_files =  self.trash.add(path)
             self.assertEquals(count, 1)
             self.assertEquals(size, 10)
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["f.txt"])
             
-            count, size = self.trash.remove(path)
+            count, size, delta_files =  self.trash.remove(path)
             self.assertEquals(count, 1)
             self.assertEquals(size, 10)
+            delta_files = [f_d[0] for f_d in delta_files]
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["f.txt"])
             
             files = list(utils.search(directory, "*", "*"))
             files = [os.path.relpath(f, directory) for f in files]
@@ -181,16 +196,20 @@ class TrashTests(unittest.TestCase):
         path = os.path.join(directory, "e")
         
         with self.trash.lock():
-            count, size = self.trash.add(path)
+            count, size, delta_files =  self.trash.add(path)
             self.assertEquals(count, 5)
             self.assertEquals(size, 15)
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["e", "e/f.txt", "e/g.txt", 
+                                            "e/h.png", "e/j", 
+                                            "e/k", "e/k/l.txt"])
             
             files = list(utils.search(directory, "*", "*"))
             files = [os.path.relpath(f, directory) for f in files]
             files.sort()
             self.assertEquals(files, ["a.txt","b.txt","c.png","d"])
             
-            count, size = self.trash.restore(path)
+            count, size, delta_files =  self.trash.restore(path)
             self.assertEquals(count, 5)
             self.assertEquals(size, 15)
             
@@ -206,13 +225,22 @@ class TrashTests(unittest.TestCase):
         path = os.path.join(directory, "e")
         
         with self.trash.lock():
-            count, size = self.trash.add(path)
+            count, size, delta_files =  self.trash.add(path)
             self.assertEquals(count, 5)
             self.assertEquals(size, 15)
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["e", "e/f.txt", "e/g.txt", 
+                                            "e/h.png", "e/j", 
+                                            "e/k", "e/k/l.txt"])
             
-            count, size = self.trash.remove(path)
+            count, size, delta_files =  self.trash.remove(path)
             self.assertEquals(count, 5)
             self.assertEquals(size, 15)
+            delta_files = [f_d[0] for f_d in delta_files]
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["e", "e/f.txt", "e/g.txt", 
+                                            "e/h.png", "e/j", 
+                                            "e/k", "e/k/l.txt"])           
             
             files = list(utils.search(directory, "*", "*"))
             files = [os.path.relpath(f, directory) for f in files]
@@ -245,18 +273,24 @@ class TrashTests(unittest.TestCase):
                 f.write("4th\n")
             self.trash.add(path)
             
-            count, size = self.trash.restore(path, how_old=3)
+            count, size, delta_files =  self.trash.restore(path, how_old=3)
             self.assertEquals(count, 1)
             self.assertEquals(size, 4)
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["a.txt"])
+            
             f = open(path, "r")
             line = f.read();
             self.assertEquals(line, "1th\n")        
             
             os.remove(path);
             
-            count, size = self.trash.restore(path, how_old=0)
+            count, size, delta_files =  self.trash.restore(path, how_old=0)
             self.assertEquals(count, 1)
             self.assertEquals(size, 4)
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["a.txt"])
+            
             f = open(path, "r")
             line = f.read();
             self.assertEquals(line, "4th\n")        
@@ -282,19 +316,25 @@ class TrashTests(unittest.TestCase):
                 f.write("3th\n")
             self.trash.add(path)
             
-            count, size = self.trash.remove(path, how_old=1)
+            count, size, delta_files =  self.trash.remove(path, how_old=1)
             self.assertEquals(count, 1)
             self.assertEquals(size, 4)
-            
+            delta_files = [f_d[0] for f_d in delta_files]
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["a.txt"])
+
             self.trash.restore(path, how_old=1)
             f = open(path, "r")
             line = f.read();
             self.assertEquals(line, "1th\n")      
             
-            count, size = self.trash.remove(path)
+            count, size, delta_files =  self.trash.remove(path)
             self.assertEquals(count, 2)
             self.assertEquals(size, 14)
-            
+            delta_files = [f_d[0] for f_d in delta_files]
+            delta_files = unify(delta_files, directory)
+            self.assertEquals(delta_files, ["a.txt", "a.txt"])
+
             path = self.trash.to_internal(path)
             self.assertTrue(len(stamp.get_versions_list(path)) == 0)
 

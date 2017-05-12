@@ -9,12 +9,18 @@ import datetime
 import myrm.stamp as stamp
 
 
+DEFAULT_CLEAN_COUNT = 1000*1000
+DEFAULT_CLEAN_SIZE = 512*1024*1024
+DEFAULT_CLEAN_DAYS = 90
+DEFAULT_CLEAN_SAME_COUNT = 10
+
+
 class Autocleaner(object):
     """Производит автоочистку корзины
-    
+
     Поля класса:
     * trash -- объект корзины
-    
+
     Критерии очистки
     * count -- число файлов
     * size -- размер
@@ -27,32 +33,41 @@ class Autocleaner(object):
     * clean_by_trash_size -- очиска по размеру файлов
     * clean_by_same_count -- очиска файлов с одинаковым именем
     * autoclean -- очистка по всем критериям
-    
+
     """
 
-    def __init__(self, trash, **kargs):
+    def __init__(self, trash,
+                 count=DEFAULT_CLEAN_COUNT,
+                 size=DEFAULT_CLEAN_SIZE,
+                 days=DEFAULT_CLEAN_DAYS,
+                 same_count=DEFAULT_CLEAN_SAME_COUNT
+                ):
         """Создает объект для определенной корзины.
-        
+
         Непозиционные аргументы:
         * count -- число файлов для очистки
         * size -- размер для очистки
         * days -- количество дней для очистки
         * same_count -- число файлов для очистки
-        
+
         """
         self.trash = trash
-        self.configurate(**kargs)
+        self.configurate(count, size, days, same_count)
 
-    def configurate(self, count=1000*1000, size=512*1024*1024,
-                    days=90, same_count=10):
+    def configurate(self,
+                    count=DEFAULT_CLEAN_COUNT,
+                    size=DEFAULT_CLEAN_SIZE,
+                    days=DEFAULT_CLEAN_DAYS,
+                    same_count=DEFAULT_CLEAN_SAME_COUNT
+                   ):
         """Обновляет поля объекта.
-        
+
         Непозиционные аргументы:
         * count -- число файлов для очистки
         * size -- размер для очистки
         * days -- количество дней для очистки
         * same_count -- число файлов для очистки
-        
+
         """
         self.count = count
         self.size = size
@@ -80,7 +95,7 @@ class Autocleaner(object):
                 self.trash.remove(path, last_version)
 
     def autoclean_by_files_count(self):
-        """Очищает по числу файлов. Возвращает новый список файлов.
+        """Очищает по числу файлов.
         """
         clean_count = self.count
 
@@ -141,11 +156,11 @@ class Autocleaner(object):
                         logging.debug(debug_line)
                         path_int = self.trash.to_internal(path)
                         last_version = len(stamp.get_versions_list(path_int))
-                        last_version -= 1
                         self.trash.remove(path, last_version)
+                        last_version -= 1
 
     def autoclean(self):
-        """Производит очиску корзины. Возвращает кол-во файлов и размер.
+        """Производт очиску корзины. Возвращает кол-во файлов и размер.
 
         Критерии очистки:
         * по дате удаления
