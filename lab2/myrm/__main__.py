@@ -116,7 +116,7 @@ def _perfome(remover, operation, file_mask, how_old=0,
                 version_str = version.strftime("%d.%m.%Y %I:%M")
                 msg = "{} (removed {})".format(path, version_str)
             print(msg)
-        return 0, 0
+        return 0, 0, 0
 
     elif operation == "clear":
         dcount, dsize, dfiles = remover.clean(file_mask, recursive=recursive,
@@ -198,9 +198,9 @@ def main(remove_only=False):
         size = 0
         for file_mask in args.filemasks:
             dcount, dsize, dfiles = _perfome(mrm, operation, file_mask,
-                                             how_old=args.how_old,
-                                             recursive=args.recursive,
-                                             versions=args.versions)
+                                                how_old=args.how_old,
+                                                recursive=args.recursive,
+                                                versions=args.versions)
             count += dcount
             size += dsize
     except Exception as error:
