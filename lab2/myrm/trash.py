@@ -16,6 +16,7 @@
 import os
 import datetime
 import logging
+import multiprocessing
 import myrm.utils as utils
 import myrm.stamp as stamp
 
@@ -129,6 +130,11 @@ class Trash(object):
     возбуждается LimitExcessException
 
     """
+    
+    mp_manager = multiprocessing.Manager()
+    common_namespace = mp_manager.Namespace()
+    common_namespace.process_max = multiprocessing.cpu_count()
+    common_namespace.process_count = 1
 
     def __init__(self,
                  directory=DEFAULT_DIRECTORY,
@@ -353,7 +359,7 @@ class Trash(object):
     def add_file(self, file_name):
         """Перемещает файл в корзину.
 
-        Возвращает колич. удаленх фалов, их размер, список путей.
+        Возвращает колич. удаленх фалов, их рself.азмер, список путей.
 
         Не следует использовать эту функцию вне класса
         во время блокировки.
@@ -386,7 +392,16 @@ class Trash(object):
 
         return count, size, [old_path]
 
-    def add_dir(self, dir_name):
+    def _fork_add_dir(self, dir_name, common_namespace, delta_namespace):
+        """Парралельно запускает перемещение в корзину.
+        """
+        args = (dir_name, common_namespace, delta_namespace)
+        proc = multiprocessing.Process(target=self.add_dir, args=args)
+        proc.start()
+        return proc
+
+    def add_dir(self, dir_name, common_namespace=common_namespace, 
+                    delta_namespace=None):
         """Премещает папку в корзину.
 
         Возвращает колич. удаленх объектов, их размер, список путей.
@@ -407,6 +422,11 @@ class Trash(object):
         count = 0
         size = 0
         result_list = [old_path]
+        sub_tasks_namespace = self.mp_manager.Namespace()
+        sub_tasks_namespace.dcount = 0
+        sub_tasks_namespace.dsize = 0
+        sub_tasks_namespace.result_list = []
+        sub_tasks = []
 
         if os.path.ismount(old_path):
             raise IOError("Can't remove mount point.")
@@ -423,15 +443,37 @@ class Trash(object):
             element_path = os.path.join(old_path, element)
             isdir = os.path.isdir(element_path)
             if  isdir:
-                delta_count, delta_size, added = self.add_dir(element_path)
+                process_max = common_namespace.process_max
+                process_count = common_namespace.process_count
+                if process_count >= process_max:
+                    delta_count, delta_size, added = self.add_dir(element_path)
+                else:
+                    dcount, dsize, added = 0, 0, []
+                    common_namespace.process_count += 1
+                    proc = self._fork_add_dir(element_path, common_namespace, 
+                                              sub_tasks_namespace)
+                    sub_tasks.append(proc)    
             else:
                 delta_count, delta_size, added = self.add_file(element_path)
             count += delta_count
             size += delta_size
             result_list.extend(added)
 
+        for task in sub_tasks:
+            task.join()
+            common_namespace.process_count -= 1
+
         if not self.dryrun:
             os.rmdir(old_path)
+
+        count += sub_tasks_namespace.dcount
+        size += sub_tasks_namespace.dsize
+        result_list += sub_tasks_namespace.result_list
+        
+        if delta_namespace:
+            delta_namespace.dcount += count
+            delta_namespace.dsize += size
+            delta_namespace.result_list += result_list
 
         return count, size, result_list
 
@@ -482,7 +524,18 @@ class Trash(object):
 
         return count, size, [new_path]
 
-    def restore_dir(self, dir_name, how_old=0):
+    def _fork_restore_dir(self, dir_name, common_namespace, 
+                         delta_namespace, how_old=0):
+        """Парралельно запускает востановление из корзины.
+        """
+        args = (dir_name, how_old, common_namespace, delta_namespace)
+        proc = multiprocessing.Process(target=self.restore_dir, args=args)
+        proc.start()
+        return proc
+        
+    def restore_dir(self, dir_name, how_old=0, 
+                    common_namespace=common_namespace, 
+                    delta_namespace=None):
         """Востанавливает папку из корзины.
 
         Возвращает колич. вост. объектов, их размер, список путей.
@@ -508,6 +561,11 @@ class Trash(object):
         count = 0
         size = 0
         result_list = [new_path]
+        sub_tasks_namespace = self.mp_manager.Namespace()
+        sub_tasks_namespace.dcount = 0
+        sub_tasks_namespace.dsize = 0
+        sub_tasks_namespace.result_list = []
+        sub_tasks = []
 
         if not os.path.exists(new_path):
             debug_msg = "Make dir {directory} ".format(directory=new_path)
@@ -520,8 +578,18 @@ class Trash(object):
         for path in elements:
             is_dir = os.path.exists(self.to_internal(path))
             if is_dir:
-                dcount, dsize, restored = self.restore_dir(path,
-                                                           how_old=how_old)
+                process_max = common_namespace.process_max
+                process_count = common_namespace.process_count
+                if process_count >= process_max:
+                    dcount, dsize, restored = self.restore_dir(path,
+                                                               how_old=how_old)
+                else:
+                    dcount, dsize, restored = 0, 0, []
+                    common_namespace.process_count += 1
+                    proc = self._fork_restore_dir(path, common_namespace, 
+                                                  sub_tasks_namespace, 
+                                                  how_old=how_old)
+                    sub_tasks.append(proc)
             else:
                 dcount, dsize, restored = self.restore_file(path,
                                                             how_old=how_old)
@@ -529,9 +597,22 @@ class Trash(object):
             size += dsize
             result_list.extend(restored)
 
+        for task in sub_tasks:
+            task.join()
+            common_namespace.process_count -= 1
+        
         exist_and_empty = os.path.exists(old_path) and utils.is_empty(old_path) 
         if exist_and_empty and not self.dryrun:
             os.rmdir(old_path)
+            
+        count += sub_tasks_namespace.dcount
+        size += sub_tasks_namespace.dsize
+        result_list += sub_tasks_namespace.result_list
+        
+        if delta_namespace:
+            delta_namespace.dcount += count
+            delta_namespace.dsize += size
+            delta_namespace.result_list += result_list
 
         return count, size, result_list
 

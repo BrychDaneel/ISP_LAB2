@@ -3,7 +3,7 @@ from os.path import join, dirname
 
 setup(
     name='myrm',
-    version='0.2',
+    version='0.3',
     packages=find_packages(),
     entry_points={
         'console_scripts':
